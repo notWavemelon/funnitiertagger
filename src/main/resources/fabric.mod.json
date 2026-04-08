@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "funnitiertagger",
+  "version": "${version}",
+  "name": "funnitiertagger",
+  "description": "bootleg tier tagger for bootleg mctiers",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/funnitiertagger/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-datagen": [
+      "org.wavemelon.funnitiertagger.client.funnitiertaggerDataGenerator"
+    ],
+    "client": [
+      "org.wavemelon.funnitiertagger.client.funnitiertaggerClient"
+    ],
+    "main": [
+      "org.wavemelon.funnitiertagger.funnitiertagger"
+    ]
+  },
+  "mixins": [
+    "funnitiertagger.mixins.json",
+    {
+      "config": "funnitiertagger.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
