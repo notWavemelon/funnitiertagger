@@ -1,7 +1,7 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "org.wavemelon.funnitiertagger.mixin.client",
+  "package": "org.wavemelon.funnitiertagger.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
   ],
