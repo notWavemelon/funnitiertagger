@@ -19,7 +19,7 @@ public abstract class TextDisplayMixin {
     @Inject(method = "getText", at = @At("RETURN"), cancellable = true)
     private void modifyText(CallbackInfoReturnable<Text> cir) {
         Text original = cir.getReturnValue();
-        if (!(original instanceof MutableText mutable)) return;
+        if (original == null) return;
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.world == null) return;
@@ -33,11 +33,12 @@ public abstract class TextDisplayMixin {
                 Text tag = TierManager.getFormattedTag(player.getUuid());
 
                 if (tag != null) {
-                    // THIS is the key difference:
-                    // we insert at the beginning without rebuilding the text
-                    mutable.getSiblings().add(0, tag);
+                    // THIS is the fix:
+                    MutableText newText = tag.copy()
+                            .append(Text.literal(""))
+                            .append(original);
 
-                    cir.setReturnValue(mutable);
+                    cir.setReturnValue(newText);
                     return;
                 }
             }
