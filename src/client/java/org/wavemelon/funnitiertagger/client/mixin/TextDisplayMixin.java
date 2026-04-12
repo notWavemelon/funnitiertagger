@@ -1,4 +1,4 @@
-package org.wavemelon.funnitiertagger.mixin;
+package org.wavemelon.funnitiertagger.client.mixin;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.decoration.DisplayEntity;
