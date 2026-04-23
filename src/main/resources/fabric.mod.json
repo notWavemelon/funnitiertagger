@@ -7,7 +7,7 @@
   "authors": [],
   "contact": {},
   "license": "All-Rights-Reserved",
-  "icon": "assets/funnitiertagger/icon.png",
+  "icon": "icon.png",
   "environment": "client",
   "entrypoints": {
     "fabric-datagen": [
