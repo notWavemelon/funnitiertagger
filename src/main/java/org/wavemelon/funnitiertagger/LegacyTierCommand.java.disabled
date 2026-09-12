@@ -1,0 +1,158 @@
+package org.wavemelon.funnitiertagger;
+
+import com.google.gson.Gson;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.Objects;
+
+public class TierCommand {
+
+    private static final HttpClient client = HttpClient.newHttpClient();
+    private static final Gson gson = new Gson();
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            .withZone(ZoneId.systemDefault());
+
+    public static void register() {
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            dispatcher.register(CommandManager.literal("funnitiers")
+                    .executes(ctx -> {
+                        String self = String.valueOf(Objects.requireNonNull(ctx.getSource().getPlayer()).getGameProfile());
+                        fetchAndSend(ctx.getSource(), self);
+                        return 1;
+                    })
+                    .then(CommandManager.argument("player", StringArgumentType.word())
+                            .executes(ctx -> {
+                                String name = StringArgumentType.getString(ctx, "player");
+                                fetchAndSend(ctx.getSource(), name);
+                                return 1;
+                            })
+                    )
+            );
+
+            dispatcher.register(CommandManager.literal("funnitiertagger")
+                    .redirect(dispatcher.getRoot().getChild("funnitiers")));
+        });
+    }
+
+    private static void fetchAndSend(ServerCommandSource source, String username) {
+        String url = "https://funnitiers-api.onrender.com/player/" + username;
+
+        client.sendAsync(HttpRequest.newBuilder().uri(URI.create(url)).build(), HttpResponse.BodyHandlers.ofString())
+                .thenAccept(res -> {
+                    try {
+                        TierProfile profile = gson.fromJson(res.body(), TierProfile.class);
+
+                        if (profile == null || profile.tiers == null) {
+                            source.sendFeedback(() -> Text.literal("§cNo data found for " + username), false);
+                            return;
+                        }
+
+                        // --- Header with Hover ---
+                        MutableText playerName = Text.literal(profile.username).formatted(Formatting.WHITE);
+                        playerName = playerName.styled(style -> style.withHoverEvent(
+                                new net.minecraft.text.HoverEvent.ShowText(
+                                        Text.literal("§bRegion: §7" + profile.region)
+                                )
+                        ));
+
+                        MutableText header = Text.literal("\n--- ").formatted(Formatting.GRAY)
+                                .append(playerName)
+                                .append(Text.literal("'s funniTiers ---").formatted(Formatting.GRAY))
+                                .append("\n");
+
+                        source.sendFeedback(() -> header, false);
+
+                        // --- Gamemodes List ---
+                        for (Map.Entry<String, TierProfile.GameModeData> entry : profile.tiers.entrySet()) {
+                            String modeKey = entry.getKey();
+                            TierProfile.GameModeData data = entry.getValue();
+
+                            MutableText line = Text.empty();
+
+                            // Icon + Mode Name
+                            MutableText modeName = getIcon(modeKey).append(Text.literal(" " + capitalize(modeKey)));
+
+                            // Tier Tag
+                            String tierStr = (data.retired ? "R" : "") + data.tier;
+                            int color = data.retired ? 0xA2D6FF : getTierColor(data.tier);
+                            MutableText tierTag = Text.literal(tierStr).styled(s -> s.withColor(color));
+
+                            // Hover details
+                            String dateStr = data.attained == 0 ? "Unknown" : DATE_FORMAT.format(Instant.ofEpochSecond(data.attained));
+                            MutableText hoverText = Text.literal("§bAttained: §7" + dateStr + "\n§bPeak Tier: §7" + data.peakTier);
+
+                            line.append(modeName).append(" ").append(tierTag);
+                            line = line.styled(style -> style.withHoverEvent(
+                                    new net.minecraft.text.HoverEvent.ShowText(hoverText)
+                            ));
+
+                            MutableText finalLine = line;
+                            source.sendFeedback(() -> finalLine, false);
+                        }
+
+                    } catch (Exception e) {
+                        source.sendFeedback(() -> Text.literal("§cError fetching tiers."), false);
+                    }
+                });
+    }
+
+    private static String capitalize(String str) {
+        if (str == null || str.isEmpty()) return str;
+        return str;
+    }
+
+    private static int getTierColor(String tier) {
+        return switch (tier) {
+            case "LT5" -> 0xD0D0D0;
+            case "HT5" -> 0x7E7E7E;
+            case "LT4" -> 0x8EEB8E;
+            case "HT4" -> 0x006300;
+            case "LT3" -> 0xC67B42;
+            case "HT3" -> 0xF89F5A;
+            case "LT2" -> 0xA0A7B2;
+            case "HT2" -> 0xC4D3E7;
+            case "LT1" -> 0xD5B355;
+            case "HT1" -> 0xFFAA00;
+            default -> 0xFFFFFF;
+        };
+    }
+
+    private static MutableText getIcon(String mode) {
+        // We use the 'mode' string directly from the API
+        return switch (mode) {
+            case "windcharge" -> Text.literal("💨");
+            case "slimemace" -> Text.literal("🫟");
+            case "realpot" -> Text.literal("🧪");
+            case "pickaxe" -> Text.literal("⛏");
+            case "boxing" -> Text.literal("🥊");
+            case "jousting" -> Text.literal("🏇");
+            case "pressureplate" -> Text.literal("🍽️");
+            case "stoneage" -> Text.literal("🪨");
+            case "woodensmp" -> Text.literal("🪵");
+            case "dogsout" -> Text.literal("🐾");
+            case "modern" -> Text.literal("☻");
+            case "carrot" -> Text.literal("🥕");
+            case "oneshot" -> Text.literal("💥");
+            case "wavemelon" -> Text.literal("🍉");
+            case "crystal;" -> Text.literal("💎"); // THE SEMICOLON IS INTENTIONAL FFS "CRYSTAL SEMICOLON"
+            case "woodenspear" -> Text.literal("🩼");
+            case "bowboostmace" -> Text.literal("⚒");
+            default -> Text.literal("•");
+        };
+    }
+}

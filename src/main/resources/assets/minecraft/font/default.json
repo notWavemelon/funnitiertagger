@@ -1,0 +1,157 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-wind_charge.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE000"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-slime_mace.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE001"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-real_pot.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE002"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-pickaxe.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE003"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-boxing.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE004"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-jousting.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE005"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-pressure_plate.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE006"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-stone_age.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE007"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-wooden_smp.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE008"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-dogs_out.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE009"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-modern.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE00A"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-carrot.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE00B"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-one_shot.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE00C"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-wavemelon.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE00D"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-crystal.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE00E"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-wooden_spear.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE00F"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "funnitiertagger:font/funntiers-bow_boost_mace.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\uE010"
+      ]
+    }
+  ]
+}
