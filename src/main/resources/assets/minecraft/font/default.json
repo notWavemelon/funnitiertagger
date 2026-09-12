@@ -2,7 +2,7 @@
   "providers": [
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-wind_charge.png",
+      "file": "funnitiertagger:font/funnitiers-wind_charge.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -11,7 +11,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-slime_mace.png",
+      "file": "funnitiertagger:font/funnitiers-slime_mace.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -20,7 +20,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-real_pot.png",
+      "file": "funnitiertagger:font/funnitiers-real_pot.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -29,7 +29,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-pickaxe.png",
+      "file": "funnitiertagger:font/funnitiers-pickaxe.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -38,7 +38,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-boxing.png",
+      "file": "funnitiertagger:font/funnitiers-boxing.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -47,7 +47,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-jousting.png",
+      "file": "funnitiertagger:font/funnitiers-jousting.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -56,7 +56,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-pressure_plate.png",
+      "file": "funnitiertagger:font/funnitiers-pressure_plate.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -65,7 +65,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-stone_age.png",
+      "file": "funnitiertagger:font/funnitiers-stone_age.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -74,7 +74,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-wooden_smp.png",
+      "file": "funnitiertagger:font/funnitiers-wooden_smp.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -83,7 +83,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-dogs_out.png",
+      "file": "funnitiertagger:font/funnitiers-dogs_out.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -92,7 +92,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-modern.png",
+      "file": "funnitiertagger:font/funnitiers-modern.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -101,7 +101,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-carrot.png",
+      "file": "funnitiertagger:font/funnitiers-carrot.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -110,7 +110,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-one_shot.png",
+      "file": "funnitiertagger:font/funnitiers-one_shot.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -119,7 +119,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-wavemelon.png",
+      "file": "funnitiertagger:font/funnitiers-wavemelon.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -128,7 +128,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-crystal.png",
+      "file": "funnitiertagger:font/funnitiers-crystal.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -137,7 +137,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-wooden_spear.png",
+      "file": "funnitiertagger:font/funnitiers-wooden_spear.png",
       "ascent": 7,
       "height": 8,
       "chars": [
@@ -146,7 +146,7 @@
     },
     {
       "type": "bitmap",
-      "file": "funnitiertagger:font/funntiers-bow_boost_mace.png",
+      "file": "funnitiertagger:font/funnitiers-bow_boost_mace.png",
       "ascent": 7,
       "height": 8,
       "chars": [
