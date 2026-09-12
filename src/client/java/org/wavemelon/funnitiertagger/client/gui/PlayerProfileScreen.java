@@ -20,6 +20,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -30,7 +31,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerProfileScreen extends Screen {
     private static final Map<String, Identifier> BUST_CACHE = new ConcurrentHashMap<>();
-    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(6))
+            .build();
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM d, yyyy");
 
     private final Screen parent;
@@ -84,33 +87,56 @@ public class PlayerProfileScreen extends Screen {
         String craftyUrl = "https://render.crafty.gg/3d/bust/" + uuidWithHyphens;
         String visageUrl = "https://visage.surgeplay.com/bust/" + uuidWithHyphens;
 
-        HTTP_CLIENT.sendAsync(HttpRequest.newBuilder().uri(URI.create(craftyUrl)).header("User-Agent", "funnitiers/1.0").build(), HttpResponse.BodyHandlers.ofByteArray())
-                .whenComplete((res, err) -> {
-                    if (err == null && res != null && res.statusCode() == 200) {
-                        tryDecodeAndRegister(res.body(), cleanUuid, () -> fetchFallbackImage(visageUrl, cleanUuid));
-                    } else {
-                        fetchFallbackImage(visageUrl, cleanUuid);
-                    }
-                });
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(craftyUrl))
+                    .timeout(Duration.ofSeconds(8))
+                    .header("User-Agent", "funnitiers/2.0.0")
+                    .build();
+
+            HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+                    .whenComplete((res, err) -> {
+                        if (err == null && res != null && res.statusCode() == 200) {
+                            tryDecodeAndRegister(res.body(), cleanUuid, () -> fetchFallbackImage(visageUrl, cleanUuid));
+                        } else {
+                            fetchFallbackImage(visageUrl, cleanUuid);
+                        }
+                    });
+        } catch (Exception e) {
+            fetchFallbackImage(visageUrl, cleanUuid);
+        }
     }
 
     private void fetchFallbackImage(String fallbackUrl, String cleanUuid) {
-        HTTP_CLIENT.sendAsync(HttpRequest.newBuilder().uri(URI.create(fallbackUrl)).header("User-Agent", "funnitiers/1.0").build(), HttpResponse.BodyHandlers.ofByteArray())
-                .whenComplete((res, err) -> {
-                    if (err == null && res != null && res.statusCode() == 200) {
-                        tryDecodeAndRegister(res.body(), cleanUuid, () -> {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(fallbackUrl))
+                    .timeout(Duration.ofSeconds(8))
+                    .header("User-Agent", "funnitiers/2.0.0")
+                    .build();
+
+            HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+                    .whenComplete((res, err) -> {
+                        if (err == null && res != null && res.statusCode() == 200) {
+                            tryDecodeAndRegister(res.body(), cleanUuid, () -> {
+                                MinecraftClient.getInstance().execute(() -> {
+                                    this.imageLoading = false;
+                                    this.imageFailed = true;
+                                });
+                            });
+                        } else {
                             MinecraftClient.getInstance().execute(() -> {
                                 this.imageLoading = false;
                                 this.imageFailed = true;
                             });
-                        });
-                    } else {
-                        MinecraftClient.getInstance().execute(() -> {
-                            this.imageLoading = false;
-                            this.imageFailed = true;
-                        });
-                    }
-                });
+                        }
+                    });
+        } catch (Exception e) {
+            MinecraftClient.getInstance().execute(() -> {
+                this.imageLoading = false;
+                this.imageFailed = true;
+            });
+        }
     }
 
     private void tryDecodeAndRegister(byte[] bytes, String cleanUuid, Runnable onFailure) {

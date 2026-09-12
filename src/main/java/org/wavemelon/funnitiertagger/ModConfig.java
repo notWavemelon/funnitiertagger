@@ -53,6 +53,9 @@ public class ModConfig {
         if (INSTANCE == null) {
             INSTANCE = new ModConfig();
         }
+        if (INSTANCE.displayType == null) {
+            INSTANCE.displayType = DisplayType.TIERS;
+        }
     }
 
     public static void save() {

@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -26,7 +27,9 @@ public class TierManager {
     public static final Map<String, Long> attainedDataCache = new ConcurrentHashMap<>();
     private static long lastOverallFetchTime = 0;
 
-    private static final HttpClient client = HttpClient.newHttpClient();
+    private static final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(6))
+            .build();
     private static final Gson gson = new Gson();
 
     private static String overrideMode = null;
@@ -79,53 +82,63 @@ public class TierManager {
     public static void fetchOverallLeaderboard() {
         lastOverallFetchTime = System.currentTimeMillis();
         String url = "https://funnitiers-api.onrender.com/overall";
-        client.sendAsync(HttpRequest.newBuilder().uri(URI.create(url)).header("User-Agent", "funnitiers/1.0").build(), HttpResponse.BodyHandlers.ofString())
-                .whenComplete((res, err) -> {
-                    try {
-                        if (err != null || res == null || res.statusCode() != 200) {
-                            return;
-                        }
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .header("User-Agent", "funnitiers/2.0.0")
+                    .build();
 
-                        JsonArray array = gson.fromJson(res.body(), JsonArray.class);
-                        if (array == null) return;
+            client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .whenComplete((res, err) -> {
+                        try {
+                            if (err != null || res == null || res.statusCode() != 200) {
+                                return;
+                            }
 
-                        for (int i = 0; i < array.size(); i++) {
-                            JsonElement el = array.get(i);
-                            if (!el.isJsonObject()) continue;
-                            JsonObject playerObj = el.getAsJsonObject();
+                            JsonArray array = gson.fromJson(res.body(), JsonArray.class);
+                            if (array == null) return;
 
-                            int rank = i + 1;
+                            for (int i = 0; i < array.size(); i++) {
+                                JsonElement el = array.get(i);
+                                if (!el.isJsonObject()) continue;
+                                JsonObject playerObj = el.getAsJsonObject();
 
-                            String uuidStr = playerObj.has("uuid") ? playerObj.get("uuid").getAsString() : null;
-                            String username = playerObj.has("username") ? playerObj.get("username").getAsString() : null;
+                                int rank = i + 1;
 
-                            if (uuidStr != null && !uuidStr.isEmpty()) {
-                                String cleanUuid = uuidStr.replace("-", "").toLowerCase();
-                                overallRankCache.put(cleanUuid, rank);
+                                String uuidStr = playerObj.has("uuid") ? playerObj.get("uuid").getAsString() : null;
+                                String username = playerObj.has("username") ? playerObj.get("username").getAsString() : null;
 
-                                // Parse gamemodes attained dates
-                                if (playerObj.has("gamemodes") && playerObj.get("gamemodes").isJsonArray()) {
-                                    JsonArray gmArray = playerObj.getAsJsonArray("gamemodes");
-                                    for (JsonElement gmEl : gmArray) {
-                                        if (!gmEl.isJsonObject()) continue;
-                                        JsonObject gmObj = gmEl.getAsJsonObject();
-                                        if (gmObj.has("mode") && gmObj.has("attained")) {
-                                            String mode = gmObj.get("mode").getAsString().toLowerCase();
-                                            long attained = gmObj.get("attained").getAsLong();
-                                            attainedDataCache.put(cleanUuid + ":" + mode, attained);
+                                if (uuidStr != null && !uuidStr.isEmpty()) {
+                                    String cleanUuid = uuidStr.replace("-", "").toLowerCase();
+                                    overallRankCache.put(cleanUuid, rank);
+
+                                    // Parse gamemodes attained dates
+                                    if (playerObj.has("gamemodes") && playerObj.get("gamemodes").isJsonArray()) {
+                                        JsonArray gmArray = playerObj.getAsJsonArray("gamemodes");
+                                        for (JsonElement gmEl : gmArray) {
+                                            if (!gmEl.isJsonObject()) continue;
+                                            JsonObject gmObj = gmEl.getAsJsonObject();
+                                            if (gmObj.has("mode") && gmObj.has("attained")) {
+                                                String mode = gmObj.get("mode").getAsString().toLowerCase();
+                                                long attained = gmObj.get("attained").getAsLong();
+                                                attainedDataCache.put(cleanUuid + ":" + mode, attained);
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            if (username != null && !username.isEmpty()) {
-                                overallRankCache.put(username.toLowerCase(), rank);
+                                if (username != null && !username.isEmpty()) {
+                                    overallRankCache.put(username.toLowerCase(), rank);
+                                }
                             }
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
+                    });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public static Text getFormattedTag(UUID uuid) {
@@ -243,24 +256,35 @@ public class TierManager {
 
     private static void fetch(UUID uuid) {
         String url = "https://funnitiers-api.onrender.com/player/" + uuid;
-        client.sendAsync(HttpRequest.newBuilder().uri(URI.create(url)).header("User-Agent", "funnitiers/1.0").build(), HttpResponse.BodyHandlers.ofString())
-                .whenComplete((res, err) -> {
-                    try {
-                        if (err != null || res == null || res.statusCode() != 200) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .header("User-Agent", "funnitiers/2.0.0")
+                    .build();
+
+            client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .whenComplete((res, err) -> {
+                        try {
+                            if (err != null || res == null || res.statusCode() != 200) {
+                                profileCache.put(uuid, EMPTY_PROFILE);
+                                return;
+                            }
+                            TierProfile p = gson.fromJson(res.body(), TierProfile.class);
+                            if (p != null && p.tiers != null) {
+                                profileCache.put(uuid, p);
+                            } else {
+                                profileCache.put(uuid, EMPTY_PROFILE);
+                            }
+                        } catch (Exception e) {
                             profileCache.put(uuid, EMPTY_PROFILE);
-                            return;
+                        } finally {
+                            pendingFetches.remove(uuid);
                         }
-                        TierProfile p = gson.fromJson(res.body(), TierProfile.class);
-                        if (p != null && p.tiers != null) {
-                            profileCache.put(uuid, p);
-                        } else {
-                            profileCache.put(uuid, EMPTY_PROFILE);
-                        }
-                    } catch (Exception e) {
-                        profileCache.put(uuid, EMPTY_PROFILE);
-                    } finally {
-                        pendingFetches.remove(uuid);
-                    }
-                });
+                    });
+        } catch (Exception e) {
+            profileCache.put(uuid, EMPTY_PROFILE);
+            pendingFetches.remove(uuid);
+        }
     }
 }

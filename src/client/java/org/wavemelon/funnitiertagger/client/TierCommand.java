@@ -11,13 +11,18 @@ import org.wavemelon.funnitiertagger.client.gui.ConfigScreen;
 import org.wavemelon.funnitiertagger.client.gui.PlayerProfileScreen;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 
 public class TierCommand {
 
-    private static final HttpClient client = HttpClient.newHttpClient();
+    private static final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(6))
+            .build();
     private static final Gson gson = new Gson();
 
     public static final String[] MODES = new String[] {
@@ -67,33 +72,44 @@ public class TierCommand {
     }
 
     private static void fetchAndOpen(FabricClientCommandSource source, String username) {
-        String url = "https://funnitiers-api.onrender.com/player/" + username;
+        try {
+            String encoded = URLEncoder.encode(username, StandardCharsets.UTF_8);
+            String url = "https://funnitiers-api.onrender.com/player/" + encoded;
 
-        client.sendAsync(HttpRequest.newBuilder().uri(URI.create(url)).header("User-Agent", "funnitiers/1.0").build(), HttpResponse.BodyHandlers.ofString())
-                .thenAccept(res -> {
-                    source.getClient().execute(() -> {
-                        try {
-                            if (res == null || res.statusCode() != 200) {
-                                source.sendFeedback(Text.literal("§cNo data found for " + username));
-                                return;
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .header("User-Agent", "funnitiers/2.0.0")
+                    .build();
+
+            client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .whenComplete((res, err) -> {
+                        source.getClient().execute(() -> {
+                            try {
+                                if (err != null || res == null || res.statusCode() != 200) {
+                                    source.sendFeedback(Text.literal("§cNo data found for " + username));
+                                    return;
+                                }
+
+                                TierProfile profile = gson.fromJson(res.body(), TierProfile.class);
+
+                                if (profile == null || profile.tiers == null || profile.tiers.isEmpty()) {
+                                    source.sendFeedback(Text.literal("§cNo data found for " + username));
+                                    return;
+                                }
+
+                                // Open the 3D bust & profile GUI
+                                source.getClient().setScreen(new PlayerProfileScreen(profile));
+
+                            } catch (Exception e) {
+                                source.sendFeedback(Text.literal("§cError fetching profile for " + username));
+                                e.printStackTrace();
                             }
-
-                            TierProfile profile = gson.fromJson(res.body(), TierProfile.class);
-
-                            if (profile == null || profile.tiers == null || profile.tiers.isEmpty()) {
-                                source.sendFeedback(Text.literal("§cNo data found for " + username));
-                                return;
-                            }
-
-                            // Open the 3D bust & profile GUI
-                            source.getClient().setScreen(new PlayerProfileScreen(profile));
-
-                        } catch (Exception e) {
-                            source.sendFeedback(Text.literal("§cError fetching profile for " + username));
-                            e.printStackTrace();
-                        }
+                        });
                     });
-                });
+        } catch (Exception e) {
+            source.sendFeedback(Text.literal("§cInvalid player name: " + username));
+        }
     }
 
     /**
