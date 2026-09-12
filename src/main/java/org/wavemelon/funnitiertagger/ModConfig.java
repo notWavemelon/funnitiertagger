@@ -20,6 +20,7 @@ public class ModConfig {
 
     public enum DisplayType {
         TIERS("Tiers (e.g. HT1)"),
+        RANK("Rank (e.g. #1)"),
         POINTS("Points (e.g. 687 pts)");
 
         public final String displayName;
@@ -29,7 +30,8 @@ public class ModConfig {
         }
 
         public DisplayType next() {
-            return this == TIERS ? POINTS : TIERS;
+            DisplayType[] values = values();
+            return values[(this.ordinal() + 1) % values.length];
         }
     }
 

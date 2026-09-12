@@ -22,7 +22,7 @@ public abstract class PlayerEntityMixin {
 
         String raw = original.getString();
         // Prevent duplicate tagging if getDisplayName is wrapped or re-invoked
-        if (raw.contains(" | ") && (raw.contains("HT") || raw.contains("LT") || raw.contains("R1") || raw.contains("R2") || raw.contains("R3") || raw.contains("R4") || raw.contains("R5") || raw.contains("pts"))) {
+        if (raw.contains(" | ") && (raw.contains("HT") || raw.contains("LT") || raw.contains("R1") || raw.contains("R2") || raw.contains("R3") || raw.contains("R4") || raw.contains("R5") || raw.contains("pts") || raw.contains("#"))) {
             return;
         }
 

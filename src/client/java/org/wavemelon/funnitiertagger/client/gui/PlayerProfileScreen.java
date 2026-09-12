@@ -20,6 +20,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PlayerProfileScreen extends Screen {
     private static final Map<String, Identifier> BUST_CACHE = new ConcurrentHashMap<>();
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM d, yyyy");
 
     private final Screen parent;
     private final TierProfile profile;
@@ -55,6 +59,11 @@ public class PlayerProfileScreen extends Screen {
         addDrawableChild(ButtonWidget.builder(Text.literal("Done"), button -> close())
                 .dimensions(this.width / 2 - 75, buttonY, 150, 20)
                 .build());
+
+        // Trigger overall rank fetch
+        if (profile != null) {
+            TierManager.getOverallRank(profile.uuid);
+        }
 
         // Load 3D bust image if not already cached
         if (profile != null && profile.uuid != null) {
@@ -147,10 +156,10 @@ public class PlayerProfileScreen extends Screen {
 
         // Draw Main Background Card
         context.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xD0101015);
-        context.fill(cardX - 1, cardY - 1, cardX + cardWidth + 1, cardY, 0x40FFFFFF); // Top subtle border
-        context.fill(cardX - 1, cardY + cardHeight, cardX + cardWidth + 1, cardY + cardHeight + 1, 0x40FFFFFF); // Bottom subtle border
-        context.fill(cardX - 1, cardY, cardX, cardY + cardHeight, 0x40FFFFFF); // Left subtle border
-        context.fill(cardX + cardWidth, cardY, cardX + cardWidth + 1, cardY + cardHeight, 0x40FFFFFF); // Right subtle border
+        context.fill(cardX - 1, cardY - 1, cardX + cardWidth + 1, cardY, 0x40FFFFFF); // Top border
+        context.fill(cardX - 1, cardY + cardHeight, cardX + cardWidth + 1, cardY + cardHeight + 1, 0x40FFFFFF); // Bottom border
+        context.fill(cardX - 1, cardY, cardX, cardY + cardHeight, 0x40FFFFFF); // Left border
+        context.fill(cardX + cardWidth, cardY, cardX + cardWidth + 1, cardY + cardHeight, 0x40FFFFFF); // Right border
 
         // Layout: Left Panel = Player Hero Card (145px), Right Panel = Gamemodes Grid
         int leftWidth = 145;
@@ -189,8 +198,20 @@ public class PlayerProfileScreen extends Screen {
                 .append(Text.literal(region).formatted(Formatting.WHITE, Formatting.BOLD));
         context.drawCenteredTextWithShadow(this.textRenderer, regionText, leftCenterX, statsY, 0xFFFFFFFF);
 
-        Text pointsText = Text.literal("Points: ").formatted(Formatting.GRAY)
+        // Overall placement rank (if available) + Points
+        Integer overallRank = null;
+        if (profile.uuid != null) {
+            overallRank = TierManager.getOverallRank(profile.uuid);
+        }
+        if (overallRank == null && profile.username != null) {
+            overallRank = TierManager.getOverallRank(profile.username);
+        }
+
+        MutableText pointsText = Text.literal("Points: ").formatted(Formatting.GRAY)
                 .append(Text.literal(profile.points + " pts").formatted(Formatting.GOLD, Formatting.BOLD));
+        if (overallRank != null) {
+            pointsText.append(Text.literal(" (#" + overallRank + ")").formatted(Formatting.YELLOW));
+        }
         context.drawCenteredTextWithShadow(this.textRenderer, pointsText, leftCenterX, statsY + 12, 0xFFFFFFFF);
 
         String peakMode = profile.getDisplayMode();
@@ -214,6 +235,9 @@ public class PlayerProfileScreen extends Screen {
         int startY = cardY + 28;
         int lineHeight = 11;
 
+        String hoveredModeKey = null;
+        TierProfile.GameModeData hoveredData = null;
+
         if (profile.tiers != null && !profile.tiers.isEmpty()) {
             List<Map.Entry<String, TierProfile.GameModeData>> entries = new ArrayList<>(profile.tiers.entrySet());
             int total = entries.size();
@@ -233,9 +257,14 @@ public class PlayerProfileScreen extends Screen {
                     continue;
                 }
 
-                // Alternating row background highlight
-                if ((inCol1 ? i : (i - half)) % 2 == 0) {
-                    context.fill(colX - 2, rowY - 1, colX + colWidth - 2, rowY + lineHeight - 1, 0x15FFFFFF);
+                // Check mouse hover
+                boolean isHovered = mouseX >= colX - 2 && mouseX <= colX + colWidth - 2 && mouseY >= rowY - 1 && mouseY <= rowY + lineHeight - 1;
+                if (isHovered) {
+                    hoveredModeKey = modeKey;
+                    hoveredData = data;
+                    context.fill(colX - 2, rowY - 1, colX + colWidth - 2, rowY + lineHeight - 1, 0x35FFFFFF);
+                } else if ((inCol1 ? i : (i - half)) % 2 == 0) {
+                    context.fill(colX - 2, rowY - 1, colX + colWidth - 2, rowY + lineHeight - 1, 0x12FFFFFF);
                 }
 
                 // Format: [Icon] Mode: Tier (Peak)
@@ -253,6 +282,59 @@ public class PlayerProfileScreen extends Screen {
 
                 context.drawTextWithShadow(this.textRenderer, line, colX, rowY, 0xFFFFFFFF);
             }
+        }
+
+        // Draw Gamemode Tooltip on Hover
+        if (hoveredModeKey != null && hoveredData != null) {
+            List<Text> tooltip = new ArrayList<>();
+            String modeFormatted = TierCommand.formatModeName(hoveredModeKey);
+            int tierColor = hoveredData.retired ? 0xFF880EFC : getTierColor(hoveredData.tier);
+            String tierStr = (hoveredData.retired ? "R" : "") + hoveredData.tier;
+
+            // 1. Title Line: [Icon] Gamemode: Tier
+            MutableText title = TierManager.getIcon(hoveredModeKey)
+                    .append(Text.literal(" " + modeFormatted).formatted(Formatting.GOLD, Formatting.BOLD))
+                    .append(Text.literal(" - " + tierStr).styled(s -> s.withColor(tierColor).withBold(true)));
+            tooltip.add(title);
+
+            // 2. Peak Tier
+            if (hoveredData.peakTier != null && !hoveredData.peakTier.equals("LTnull")) {
+                tooltip.add(Text.literal("Peak Tier: ").formatted(Formatting.GRAY)
+                        .append(Text.literal(hoveredData.peakTier).formatted(Formatting.AQUA)));
+            }
+
+            // 3. Points Given
+            tooltip.add(Text.literal("Points Awarded: ").formatted(Formatting.GRAY)
+                    .append(Text.literal("+" + hoveredData.points + " pts").formatted(Formatting.YELLOW)));
+
+            // 4. Attained Date
+            Long attained = null;
+            if (hoveredData.attained > 0) {
+                attained = hoveredData.attained;
+            } else if (profile.uuid != null) {
+                attained = TierManager.getAttained(profile.uuid, hoveredModeKey);
+            }
+
+            if (attained != null && attained > 1000000) {
+                try {
+                    String dateStr = Instant.ofEpochSecond(attained).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER);
+                    tooltip.add(Text.literal("Attained: ").formatted(Formatting.GRAY)
+                            .append(Text.literal(dateStr).formatted(Formatting.WHITE)));
+                } catch (Exception ignored) {
+                    tooltip.add(Text.literal("Attained: ").formatted(Formatting.GRAY)
+                            .append(Text.literal("Legacy / Active").formatted(Formatting.DARK_GRAY)));
+                }
+            } else {
+                tooltip.add(Text.literal("Attained: ").formatted(Formatting.GRAY)
+                        .append(Text.literal("Legacy / Active").formatted(Formatting.DARK_GRAY)));
+            }
+
+            // 5. Retired status
+            if (hoveredData.retired) {
+                tooltip.add(Text.literal("Status: Retired").formatted(Formatting.LIGHT_PURPLE));
+            }
+
+            context.drawTooltip(this.textRenderer, tooltip, mouseX, mouseY);
         }
     }
 
