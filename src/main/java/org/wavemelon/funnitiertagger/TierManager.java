@@ -4,8 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -22,7 +22,6 @@ public class TierManager {
     private static final Set<UUID> pendingFetches = ConcurrentHashMap.newKeySet();
     private static final TierProfile EMPTY_PROFILE = new TierProfile();
 
-    // Cache for overall placement (#1, #2, etc.) and attained timestamps
     public static final Map<String, Integer> overallRankCache = new ConcurrentHashMap<>();
     public static final Map<String, Long> attainedDataCache = new ConcurrentHashMap<>();
     private static long lastOverallFetchTime = 0;
@@ -74,7 +73,7 @@ public class TierManager {
 
     private static void checkFetchOverall() {
         long now = System.currentTimeMillis();
-        if (now - lastOverallFetchTime > 60_000) { // Refresh every 60 seconds
+        if (now - lastOverallFetchTime > 60_000) {
             fetchOverallLeaderboard();
         }
     }
@@ -113,7 +112,6 @@ public class TierManager {
                                     String cleanUuid = uuidStr.replace("-", "").toLowerCase();
                                     overallRankCache.put(cleanUuid, rank);
 
-                                    // Parse gamemodes attained dates
                                     if (playerObj.has("gamemodes") && playerObj.get("gamemodes").isJsonArray()) {
                                         JsonArray gmArray = playerObj.getAsJsonArray("gamemodes");
                                         for (JsonElement gmEl : gmArray) {
@@ -141,7 +139,7 @@ public class TierManager {
         }
     }
 
-    public static Text getFormattedTag(UUID uuid) {
+    public static Component getFormattedTag(UUID uuid) {
         if (uuid == null) return null;
 
         if (!ModConfig.getInstance().enabled) {
@@ -162,26 +160,23 @@ public class TierManager {
             return null;
         }
 
-        // 1. Overall Rank Display Mode
         if (ModConfig.getInstance().displayType == ModConfig.DisplayType.RANK) {
             Integer rank = getOverallRank(uuid.toString());
             if (rank != null) {
-                MutableText tag = Text.literal("🏆 ").styled(s -> s.withColor(0xFFD700));
-                tag.append(Text.literal("#" + rank).styled(s -> s.withColor(0xFFAA00)));
-                tag.append(Text.literal(" | ").styled(s -> s.withColor(0xAAAAAA)));
+                MutableComponent tag = Component.literal("🏆 ").withStyle(s -> s.withColor(0xFFD700));
+                tag.append(Component.literal("#" + rank).withStyle(s -> s.withColor(0xFFAA00)));
+                tag.append(Component.literal(" | ").withStyle(s -> s.withColor(0xAAAAAA)));
                 return tag;
             }
         }
 
-        // 2. Points Display Mode
         if (ModConfig.getInstance().displayType == ModConfig.DisplayType.POINTS) {
-            MutableText tag = Text.literal("⭐ ").styled(s -> s.withColor(0xFFD700));
-            tag.append(Text.literal(profile.points + " pts").styled(s -> s.withColor(0xFFAA00)));
-            tag.append(Text.literal(" | ").styled(s -> s.withColor(0xAAAAAA)));
+            MutableComponent tag = Component.literal("⭐ ").withStyle(s -> s.withColor(0xFFD700));
+            tag.append(Component.literal(profile.points + " pts").withStyle(s -> s.withColor(0xFFAA00)));
+            tag.append(Component.literal(" | ").withStyle(s -> s.withColor(0xAAAAAA)));
             return tag;
         }
 
-        // 3. Tiers Display Mode (Default)
         String effectiveMode = getOverrideMode();
         String modeKey;
         if (effectiveMode != null && profile.tiers.containsKey(effectiveMode)) {
@@ -196,17 +191,11 @@ public class TierManager {
         if (data == null || data.tier == null) return null;
 
         try {
-            // Build the Icon
-            MutableText tag = getIcon(modeKey);
-
-            // Build the Tier (e.g., "R1" or "HT1")
+            MutableComponent tag = getIcon(modeKey);
             String tierStr = (data.retired ? "R" : "") + data.tier;
             int tierColor = data.retired ? 0x880EFC : getTierColor(data.tier);
-            tag.append(Text.literal(" " + tierStr).styled(s -> s.withColor(tierColor)));
-
-            // Add Separator
-            tag.append(Text.literal(" | ").styled(s -> s.withColor(0xAAAAAA)));
-
+            tag.append(Component.literal(" " + tierStr).withStyle(s -> s.withColor(tierColor)));
+            tag.append(Component.literal(" | ").withStyle(s -> s.withColor(0xAAAAAA)));
             return tag;
         } catch (Exception e) {
             return null;
@@ -230,27 +219,27 @@ public class TierManager {
         };
     }
 
-    public static MutableText getIcon(String mode) {
-        if (mode == null) return Text.literal("");
+    public static MutableComponent getIcon(String mode) {
+        if (mode == null) return Component.literal("");
         return switch (mode) {
-            case "wind_charge" -> Text.literal("\uE000");
-            case "slime_mace" -> Text.literal("\uE001");
-            case "real_pot" -> Text.literal("\uE002");
-            case "pickaxe" -> Text.literal("\uE003");
-            case "boxing" -> Text.literal("\uE004");
-            case "jousting" -> Text.literal("\uE005");
-            case "pressure_plate" -> Text.literal("\uE006");
-            case "stone_age" -> Text.literal("\uE007");
-            case "wooden_smp" -> Text.literal("\uE008");
-            case "dogs_out" -> Text.literal("\uE009");
-            case "modern" -> Text.literal("\uE00A");
-            case "carrot" -> Text.literal("\uE00B");
-            case "one_shot" -> Text.literal("\uE00C");
-            case "wavemelon" -> Text.literal("\uE00D");
-            case "crystal", "crystal;" -> Text.literal("\uE00E");
-            case "wooden_spear" -> Text.literal("\uE00F");
-            case "bow_boost_mace" -> Text.literal("\uE010");
-            default -> Text.literal("");
+            case "wind_charge" -> Component.literal("\uE000");
+            case "slime_mace" -> Component.literal("\uE001");
+            case "real_pot" -> Component.literal("\uE002");
+            case "pickaxe" -> Component.literal("\uE003");
+            case "boxing" -> Component.literal("\uE004");
+            case "jousting" -> Component.literal("\uE005");
+            case "pressure_plate" -> Component.literal("\uE006");
+            case "stone_age" -> Component.literal("\uE007");
+            case "wooden_smp" -> Component.literal("\uE008");
+            case "dogs_out" -> Component.literal("\uE009");
+            case "modern" -> Component.literal("\uE00A");
+            case "carrot" -> Component.literal("\uE00B");
+            case "one_shot" -> Component.literal("\uE00C");
+            case "wavemelon" -> Component.literal("\uE00D");
+            case "crystal", "crystal;" -> Component.literal("\uE00E");
+            case "wooden_spear" -> Component.literal("\uE00F");
+            case "bow_boost_mace" -> Component.literal("\uE010");
+            default -> Component.literal("");
         };
     }
 

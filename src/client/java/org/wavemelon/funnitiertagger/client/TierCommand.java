@@ -2,10 +2,10 @@ package org.wavemelon.funnitiertagger.client;
 
 import com.google.gson.Gson;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 import org.wavemelon.funnitiertagger.TierProfile;
 import org.wavemelon.funnitiertagger.client.gui.ConfigScreen;
 import org.wavemelon.funnitiertagger.client.gui.PlayerProfileScreen;
@@ -47,15 +47,15 @@ public class TierCommand {
 
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            var rootCommand = ClientCommandManager.literal("funnitiers")
+            var rootCommand = ClientCommands.literal("funnitiers")
                     .executes(ctx -> {
                         // Open Config GUI when run without arguments
-                        ctx.getSource().getClient().send(() -> {
-                            ctx.getSource().getClient().setScreen(new ConfigScreen(null));
+                        ctx.getSource().getClient().execute(() -> {
+                            ctx.getSource().getClient().gui.setScreen(new ConfigScreen(null));
                         });
                         return 1;
                     })
-                    .then(ClientCommandManager.argument("player", StringArgumentType.word())
+                    .then(ClientCommands.argument("player", StringArgumentType.word())
                             .executes(ctx -> {
                                 String name = StringArgumentType.getString(ctx, "player");
                                 fetchAndOpen(ctx.getSource(), name);
@@ -66,7 +66,7 @@ public class TierCommand {
             dispatcher.register(rootCommand);
 
             // Register the alias
-            dispatcher.register(ClientCommandManager.literal("funnitiertagger")
+            dispatcher.register(ClientCommands.literal("funnitiertagger")
                     .redirect(dispatcher.getRoot().getChild("funnitiers")));
         });
     }
@@ -87,28 +87,28 @@ public class TierCommand {
                         source.getClient().execute(() -> {
                             try {
                                 if (err != null || res == null || res.statusCode() != 200) {
-                                    source.sendFeedback(Text.literal("§cNo data found for " + username));
+                                    source.sendFeedback(Component.literal("§cNo data found for " + username));
                                     return;
                                 }
 
                                 TierProfile profile = gson.fromJson(res.body(), TierProfile.class);
 
                                 if (profile == null || profile.tiers == null || profile.tiers.isEmpty()) {
-                                    source.sendFeedback(Text.literal("§cNo data found for " + username));
+                                    source.sendFeedback(Component.literal("§cNo data found for " + username));
                                     return;
                                 }
 
                                 // Open the 3D bust & profile GUI
-                                source.getClient().setScreen(new PlayerProfileScreen(profile));
+                                source.getClient().gui.setScreen(new PlayerProfileScreen(profile));
 
                             } catch (Exception e) {
-                                source.sendFeedback(Text.literal("§cError fetching profile for " + username));
+                                source.sendFeedback(Component.literal("§cError fetching profile for " + username));
                                 e.printStackTrace();
                             }
                         });
                     });
         } catch (Exception e) {
-            source.sendFeedback(Text.literal("§cInvalid player name: " + username));
+            source.sendFeedback(Component.literal("§cInvalid player name: " + username));
         }
     }
 

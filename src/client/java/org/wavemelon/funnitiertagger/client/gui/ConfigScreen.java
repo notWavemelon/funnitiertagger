@@ -1,10 +1,10 @@
 package org.wavemelon.funnitiertagger.client.gui;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import org.wavemelon.funnitiertagger.ModConfig;
 import org.wavemelon.funnitiertagger.TierManager;
 import org.wavemelon.funnitiertagger.client.TierCommand;
@@ -19,7 +19,7 @@ public class ConfigScreen extends Screen {
     private int currentModeIndex = 0;
 
     public ConfigScreen(Screen parent) {
-        super(Text.literal("funniTiers Configuration"));
+        super(Component.literal("funniTiers Configuration"));
         this.parent = parent;
 
         availableModes.add(null); // Automatic
@@ -43,15 +43,15 @@ public class ConfigScreen extends Screen {
         int gap = 24;
 
         // 1. Enabled Toggle
-        addDrawableChild(ButtonWidget.builder(getEnabledText(), button -> {
+        addRenderableWidget(Button.builder(getEnabledText(), button -> {
             ModConfig.getInstance().enabled = !ModConfig.getInstance().enabled;
             ModConfig.save();
             TierManager.clearCache();
             button.setMessage(getEnabledText());
-        }).dimensions(centerX - buttonWidth / 2, startY, buttonWidth, buttonHeight).build());
+        }).bounds(centerX - buttonWidth / 2, startY, buttonWidth, buttonHeight).build());
 
         // 2. Mode Cycle
-        addDrawableChild(ButtonWidget.builder(getModeText(), button -> {
+        addRenderableWidget(Button.builder(getModeText(), button -> {
             currentModeIndex = (currentModeIndex + 1) % availableModes.size();
             String newMode = availableModes.get(currentModeIndex);
             ModConfig.getInstance().selectedMode = newMode;
@@ -59,57 +59,57 @@ public class ConfigScreen extends Screen {
             ModConfig.save();
             TierManager.clearCache();
             button.setMessage(getModeText());
-        }).dimensions(centerX - buttonWidth / 2, startY + gap, buttonWidth, buttonHeight).build());
+        }).bounds(centerX - buttonWidth / 2, startY + gap, buttonWidth, buttonHeight).build());
 
         // 3. Display Format Cycle
-        addDrawableChild(ButtonWidget.builder(getDisplayTypeText(), button -> {
+        addRenderableWidget(Button.builder(getDisplayTypeText(), button -> {
             ModConfig.getInstance().displayType = ModConfig.getInstance().displayType.next();
             ModConfig.save();
             TierManager.clearCache();
             button.setMessage(getDisplayTypeText());
-        }).dimensions(centerX - buttonWidth / 2, startY + gap * 2, buttonWidth, buttonHeight).build());
+        }).bounds(centerX - buttonWidth / 2, startY + gap * 2, buttonWidth, buttonHeight).build());
 
         // 4. Clear Cache Button
-        addDrawableChild(ButtonWidget.builder(Text.literal("Clear Tier Cache").formatted(Formatting.YELLOW), button -> {
+        addRenderableWidget(Button.builder(Component.literal("Clear Tier Cache").withStyle(ChatFormatting.YELLOW), button -> {
             TierManager.clearCache();
-            button.setMessage(Text.literal("Tier Cache Cleared!").formatted(Formatting.GREEN));
-        }).dimensions(centerX - buttonWidth / 2, startY + gap * 3, buttonWidth, buttonHeight).build());
+            button.setMessage(Component.literal("Tier Cache Cleared!").withStyle(ChatFormatting.GREEN));
+        }).bounds(centerX - buttonWidth / 2, startY + gap * 3, buttonWidth, buttonHeight).build());
 
         // 5. Done Button
-        addDrawableChild(ButtonWidget.builder(Text.literal("Done"), button -> {
-            close();
-        }).dimensions(centerX - buttonWidth / 2, startY + gap * 4 + 10, buttonWidth, buttonHeight).build());
+        addRenderableWidget(Button.builder(Component.literal("Done"), button -> {
+            onClose();
+        }).bounds(centerX - buttonWidth / 2, startY + gap * 4 + 10, buttonWidth, buttonHeight).build());
     }
 
-    private Text getEnabledText() {
+    private Component getEnabledText() {
         boolean enabled = ModConfig.getInstance().enabled;
-        return Text.literal("Nametags & Displays: ")
-                .append(enabled ? Text.literal("ON").formatted(Formatting.GREEN, Formatting.BOLD) : Text.literal("OFF").formatted(Formatting.RED, Formatting.BOLD));
+        return Component.literal("Nametags & Displays: ")
+                .append(enabled ? Component.literal("ON").withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD) : Component.literal("OFF").withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
     }
 
-    private Text getModeText() {
+    private Component getModeText() {
         String mode = ModConfig.getInstance().selectedMode;
         if (mode == null) {
-            return Text.literal("Gamemode: ").append(Text.literal("Automatic (Peak)").formatted(Formatting.AQUA));
+            return Component.literal("Gamemode: ").append(Component.literal("Automatic (Peak)").withStyle(ChatFormatting.AQUA));
         }
-        return Text.literal("Gamemode: ").append(Text.literal(TierCommand.formatModeName(mode)).formatted(Formatting.GOLD));
+        return Component.literal("Gamemode: ").append(Component.literal(TierCommand.formatModeName(mode)).withStyle(ChatFormatting.GOLD));
     }
 
-    private Text getDisplayTypeText() {
+    private Component getDisplayTypeText() {
         ModConfig.DisplayType type = ModConfig.getInstance().displayType;
-        return Text.literal("Display: ").append(Text.literal(type.displayName).formatted(Formatting.LIGHT_PURPLE));
+        return Component.literal("Display: ").append(Component.literal(type.displayName).withStyle(ChatFormatting.LIGHT_PURPLE));
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, this.height / 4 - 28, 0xFFFFFFFF);
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(context, mouseX, mouseY, delta);
+        context.centeredText(this.font, this.title, this.width / 2, this.height / 4 - 28, 0xFFFFFFFF);
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 }

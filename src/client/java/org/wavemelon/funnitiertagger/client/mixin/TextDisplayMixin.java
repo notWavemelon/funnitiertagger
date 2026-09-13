@@ -1,11 +1,11 @@
 package org.wavemelon.funnitiertagger.client.mixin;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.entity.decoration.DisplayEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,18 +16,18 @@ import org.wavemelon.funnitiertagger.TierManager;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@Mixin(DisplayEntity.TextDisplayEntity.class)
+@Mixin(Display.TextDisplay.class)
 public abstract class TextDisplayMixin {
 
     @Inject(method = "getText", at = @At("RETURN"), cancellable = true)
-    private void addTierToTextDisplay(CallbackInfoReturnable<Text> cir) {
+    private void addTierToTextDisplay(CallbackInfoReturnable<Component> cir) {
         if (!ModConfig.getInstance().enabled) return;
 
-        Text original = cir.getReturnValue();
+        Component original = cir.getReturnValue();
         if (original == null) return;
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) return;
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return;
 
         String raw = original.getString();
         if (raw.isEmpty()) return;
@@ -37,20 +37,20 @@ public abstract class TextDisplayMixin {
             return;
         }
 
-        DisplayEntity.TextDisplayEntity entity = (DisplayEntity.TextDisplayEntity) (Object) this;
+        Display.TextDisplay entity = (Display.TextDisplay) (Object) this;
 
         // 1. Fast-path: check if entity is riding a player
-        if (entity.getVehicle() instanceof PlayerEntity player) {
-            Text tag = TierManager.getFormattedTag(player.getUuid());
+        if (entity.getVehicle() instanceof Player player) {
+            Component tag = TierManager.getFormattedTag(player.getUUID());
             if (tag != null) {
-                MutableText newText = Text.empty().append(tag).append(original);
+                MutableComponent newText = Component.empty().append(tag).append(original);
                 cir.setReturnValue(newText);
             }
             return;
         }
 
         // 2. Fallback: match by exact word boundary against nearby players
-        for (AbstractClientPlayerEntity player : client.world.getPlayers()) {
+        for (AbstractClientPlayer player : client.level.players()) {
             String name = player.getName().getString();
             if (name == null || name.length() < 3) continue;
 
@@ -58,9 +58,9 @@ public abstract class TextDisplayMixin {
             Matcher matcher = pattern.matcher(raw);
 
             if (matcher.find()) {
-                Text tag = TierManager.getFormattedTag(player.getUuid());
+                Component tag = TierManager.getFormattedTag(player.getUUID());
                 if (tag != null) {
-                    MutableText newText = Text.empty().append(tag).append(original);
+                    MutableComponent newText = Component.empty().append(tag).append(original);
                     cir.setReturnValue(newText);
                     return;
                 }

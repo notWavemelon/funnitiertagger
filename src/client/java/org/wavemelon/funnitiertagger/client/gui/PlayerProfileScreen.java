@@ -1,21 +1,20 @@
 package org.wavemelon.funnitiertagger.client.gui;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
+import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.Identifier;
 import org.wavemelon.funnitiertagger.TierManager;
 import org.wavemelon.funnitiertagger.TierProfile;
 import org.wavemelon.funnitiertagger.client.TierCommand;
 
-import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -43,7 +42,7 @@ public class PlayerProfileScreen extends Screen {
     private boolean imageFailed = false;
 
     public PlayerProfileScreen(Screen parent, TierProfile profile) {
-        super(Text.literal(profile != null && profile.username != null ? profile.username : "Player Profile"));
+        super(Component.literal(profile != null && profile.username != null ? profile.username : "Player Profile"));
         this.parent = parent;
         this.profile = profile;
     }
@@ -59,8 +58,8 @@ public class PlayerProfileScreen extends Screen {
         int buttonY = Math.min(this.height - 26, cardY + cardHeight + 8);
 
         // Centered Done button
-        addDrawableChild(ButtonWidget.builder(Text.literal("Done"), button -> close())
-                .dimensions(this.width / 2 - 75, buttonY, 150, 20)
+        addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
+                .bounds(this.width / 2 - 75, buttonY, 150, 20)
                 .build());
 
         // Trigger overall rank fetch
@@ -84,26 +83,26 @@ public class PlayerProfileScreen extends Screen {
     }
 
     private void fetchBustImage(String uuidWithHyphens, String cleanUuid) {
-        String craftyUrl = "https://render.crafty.gg/3d/bust/" + uuidWithHyphens;
         String visageUrl = "https://visage.surgeplay.com/bust/" + uuidWithHyphens;
+        String mcHeadsUrl = "https://mc-heads.net/avatar/" + cleanUuid;
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(craftyUrl))
+                    .uri(URI.create(visageUrl))
                     .timeout(Duration.ofSeconds(8))
-                    .header("User-Agent", "funnitiers/2.0.0")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     .build();
 
             HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
                     .whenComplete((res, err) -> {
                         if (err == null && res != null && res.statusCode() == 200) {
-                            tryDecodeAndRegister(res.body(), cleanUuid, () -> fetchFallbackImage(visageUrl, cleanUuid));
+                            tryDecodeAndRegister(res.body(), cleanUuid, () -> fetchFallbackImage(mcHeadsUrl, cleanUuid));
                         } else {
-                            fetchFallbackImage(visageUrl, cleanUuid);
+                            fetchFallbackImage(mcHeadsUrl, cleanUuid);
                         }
                     });
         } catch (Exception e) {
-            fetchFallbackImage(visageUrl, cleanUuid);
+            fetchFallbackImage(mcHeadsUrl, cleanUuid);
         }
     }
 
@@ -112,27 +111,27 @@ public class PlayerProfileScreen extends Screen {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(fallbackUrl))
                     .timeout(Duration.ofSeconds(8))
-                    .header("User-Agent", "funnitiers/2.0.0")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     .build();
 
             HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
                     .whenComplete((res, err) -> {
                         if (err == null && res != null && res.statusCode() == 200) {
                             tryDecodeAndRegister(res.body(), cleanUuid, () -> {
-                                MinecraftClient.getInstance().execute(() -> {
+                                Minecraft.getInstance().execute(() -> {
                                     this.imageLoading = false;
                                     this.imageFailed = true;
                                 });
                             });
                         } else {
-                            MinecraftClient.getInstance().execute(() -> {
+                            Minecraft.getInstance().execute(() -> {
                                 this.imageLoading = false;
                                 this.imageFailed = true;
                             });
                         }
                     });
         } catch (Exception e) {
-            MinecraftClient.getInstance().execute(() -> {
+            Minecraft.getInstance().execute(() -> {
                 this.imageLoading = false;
                 this.imageFailed = true;
             });
@@ -141,16 +140,17 @@ public class PlayerProfileScreen extends Screen {
 
     private void tryDecodeAndRegister(byte[] bytes, String cleanUuid, Runnable onFailure) {
         try {
-            NativeImage image = NativeImage.read(new ByteArrayInputStream(bytes));
+            NativeImage image = NativeImage.read(bytes);
             if (image == null) {
                 onFailure.run();
                 return;
             }
-            MinecraftClient.getInstance().execute(() -> {
+            Minecraft.getInstance().execute(() -> {
                 try {
-                    NativeImageBackedTexture dynamicTexture = new NativeImageBackedTexture(() -> "bust_" + cleanUuid, image);
-                    Identifier textureId = Identifier.of("funnitiers", "bust_" + cleanUuid);
-                    MinecraftClient.getInstance().getTextureManager().registerTexture(textureId, dynamicTexture);
+                    DynamicTexture dynamicTexture = new DynamicTexture(() -> "bust_" + cleanUuid, image);
+                    dynamicTexture.upload();
+                    Identifier textureId = Identifier.fromNamespaceAndPath("funnitiers", "bust_" + cleanUuid);
+                    Minecraft.getInstance().getTextureManager().register(textureId, dynamicTexture);
                     BUST_CACHE.put(cleanUuid, textureId);
                     this.bustTexture = textureId;
                     this.imageLoading = false;
@@ -166,11 +166,11 @@ public class PlayerProfileScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(context, mouseX, mouseY, delta);
 
         if (profile == null) {
-            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("No profile data").formatted(Formatting.RED), this.width / 2, this.height / 2, 0xFFFF5555);
+            context.centeredText(this.font, Component.literal("No profile data").withStyle(ChatFormatting.RED), this.width / 2, this.height / 2, 0xFFFF5555);
             return;
         }
 
@@ -197,8 +197,8 @@ public class PlayerProfileScreen extends Screen {
         // --- LEFT PANEL: PLAYER PROFILE ---
         // 1. Player Username (Bold Aqua)
         String name = profile.username != null ? profile.username : "Unknown";
-        MutableText nameText = Text.literal(name).formatted(Formatting.AQUA, Formatting.BOLD);
-        context.drawCenteredTextWithShadow(this.textRenderer, nameText, leftCenterX, cardY + 12, 0xFF55FFFF);
+        MutableComponent nameText = Component.literal(name).withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD);
+        context.centeredText(this.font, nameText, leftCenterX, cardY + 12, 0xFF55FFFF);
 
         // 2. 3D Bust (Size 76x76)
         int bustSize = 76;
@@ -210,19 +210,19 @@ public class PlayerProfileScreen extends Screen {
         context.fill(bustX - 3, bustY - 3, bustX + bustSize + 3, bustY - 2, 0x30FFFFFF);
 
         if (this.bustTexture != null) {
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, this.bustTexture, bustX, bustY, 0.0f, 0.0f, bustSize, bustSize, bustSize, bustSize);
+            context.blit(RenderPipelines.GUI_TEXTURED, this.bustTexture, bustX, bustY, 0.0f, 0.0f, bustSize, bustSize, bustSize, bustSize);
         } else if (this.imageLoading) {
-            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Loading...").formatted(Formatting.GRAY), leftCenterX, bustY + 34, 0xFFAAAAAA);
+            context.centeredText(this.font, Component.literal("Loading...").withStyle(ChatFormatting.GRAY), leftCenterX, bustY + 34, 0xFFAAAAAA);
         } else {
-            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("No Bust").formatted(Formatting.DARK_GRAY), leftCenterX, bustY + 34, 0xFF888888);
+            context.centeredText(this.font, Component.literal("No Bust").withStyle(ChatFormatting.DARK_GRAY), leftCenterX, bustY + 34, 0xFF888888);
         }
 
         // 3. Stats below bust
         int statsY = bustY + bustSize + 8;
         String region = profile.region != null ? profile.region : "Unknown";
-        Text regionText = Text.literal("Region: ").formatted(Formatting.GRAY)
-                .append(Text.literal(region).formatted(Formatting.WHITE, Formatting.BOLD));
-        context.drawCenteredTextWithShadow(this.textRenderer, regionText, leftCenterX, statsY, 0xFFFFFFFF);
+        Component regionText = Component.literal("Region: ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal(region).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD));
+        context.centeredText(this.font, regionText, leftCenterX, statsY, 0xFFFFFFFF);
 
         // Overall placement rank (if available) + Points
         Integer overallRank = null;
@@ -233,18 +233,18 @@ public class PlayerProfileScreen extends Screen {
             overallRank = TierManager.getOverallRank(profile.username);
         }
 
-        MutableText pointsText = Text.literal("Points: ").formatted(Formatting.GRAY)
-                .append(Text.literal(profile.points + " pts").formatted(Formatting.GOLD, Formatting.BOLD));
+        MutableComponent pointsText = Component.literal("Points: ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal(profile.points + " pts").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
         if (overallRank != null) {
-            pointsText.append(Text.literal(" (#" + overallRank + ")").formatted(Formatting.YELLOW));
+            pointsText.append(Component.literal(" (#" + overallRank + ")").withStyle(ChatFormatting.YELLOW));
         }
-        context.drawCenteredTextWithShadow(this.textRenderer, pointsText, leftCenterX, statsY + 12, 0xFFFFFFFF);
+        context.centeredText(this.font, pointsText, leftCenterX, statsY + 12, 0xFFFFFFFF);
 
         String peakMode = profile.getDisplayMode();
         if (peakMode != null) {
-            Text bestText = Text.literal("Peak: ").formatted(Formatting.DARK_GRAY)
-                    .append(Text.literal(TierCommand.formatModeName(peakMode)).formatted(Formatting.YELLOW));
-            context.drawCenteredTextWithShadow(this.textRenderer, bestText, leftCenterX, statsY + 24, 0xFFFFFFFF);
+            Component bestText = Component.literal("Peak: ").withStyle(ChatFormatting.DARK_GRAY)
+                    .append(Component.literal(TierCommand.formatModeName(peakMode)).withStyle(ChatFormatting.YELLOW));
+            context.centeredText(this.font, bestText, leftCenterX, statsY + 24, 0xFFFFFFFF);
         }
 
         // --- RIGHT PANEL: GAMEMODES GRID ---
@@ -252,8 +252,8 @@ public class PlayerProfileScreen extends Screen {
         int rightWidth = cardWidth - leftWidth - 24;
 
         // Header
-        Text headerText = Text.literal("Gamemode Tiers").formatted(Formatting.YELLOW, Formatting.BOLD);
-        context.drawTextWithShadow(this.textRenderer, headerText, rightX, cardY + 12, 0xFFFFAA00);
+        Component headerText = Component.literal("Gamemode Tiers").withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD);
+        context.text(this.font, headerText, rightX, cardY + 12, 0xFFFFAA00);
 
         int colWidth = (rightWidth - 10) / 2;
         int col1X = rightX;
@@ -294,44 +294,44 @@ public class PlayerProfileScreen extends Screen {
                 }
 
                 // Format: [Icon] Mode: Tier (Peak)
-                MutableText icon = TierManager.getIcon(modeKey);
+                MutableComponent icon = TierManager.getIcon(modeKey);
                 String modeFormatted = TierCommand.formatModeName(modeKey);
                 int tierColor = data.retired ? 0xFF880EFC : getTierColor(data.tier);
                 String tierStr = (data.retired ? "R" : "") + data.tier;
 
-                MutableText line = icon.append(Text.literal(" " + modeFormatted + ": ").formatted(Formatting.WHITE))
-                        .append(Text.literal(tierStr).styled(s -> s.withColor(tierColor)));
+                MutableComponent line = icon.append(Component.literal(" " + modeFormatted + ": ").withStyle(ChatFormatting.WHITE))
+                        .append(Component.literal(tierStr).withStyle(s -> s.withColor(tierColor)));
 
                 if (data.peakTier != null && !data.peakTier.equals(data.tier) && !data.peakTier.equals("LTnull")) {
-                    line.append(Text.literal(" (" + data.peakTier + ")").formatted(Formatting.DARK_GRAY));
+                    line.append(Component.literal(" (" + data.peakTier + ")").withStyle(ChatFormatting.DARK_GRAY));
                 }
 
-                context.drawTextWithShadow(this.textRenderer, line, colX, rowY, 0xFFFFFFFF);
+                context.text(this.font, line, colX, rowY, 0xFFFFFFFF);
             }
         }
 
         // Draw Gamemode Tooltip on Hover
         if (hoveredModeKey != null && hoveredData != null) {
-            List<Text> tooltip = new ArrayList<>();
+            List<Component> tooltip = new ArrayList<>();
             String modeFormatted = TierCommand.formatModeName(hoveredModeKey);
             int tierColor = hoveredData.retired ? 0xFF880EFC : getTierColor(hoveredData.tier);
             String tierStr = (hoveredData.retired ? "R" : "") + hoveredData.tier;
 
             // 1. Title Line: [Icon] Gamemode: Tier
-            MutableText title = TierManager.getIcon(hoveredModeKey)
-                    .append(Text.literal(" " + modeFormatted).formatted(Formatting.GOLD, Formatting.BOLD))
-                    .append(Text.literal(" - " + tierStr).styled(s -> s.withColor(tierColor).withBold(true)));
+            MutableComponent title = TierManager.getIcon(hoveredModeKey)
+                    .append(Component.literal(" " + modeFormatted).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
+                    .append(Component.literal(" - " + tierStr).withStyle(s -> s.withColor(tierColor).withBold(true)));
             tooltip.add(title);
 
             // 2. Peak Tier
             if (hoveredData.peakTier != null && !hoveredData.peakTier.equals("LTnull")) {
-                tooltip.add(Text.literal("Peak Tier: ").formatted(Formatting.GRAY)
-                        .append(Text.literal(hoveredData.peakTier).formatted(Formatting.AQUA)));
+                tooltip.add(Component.literal("Peak Tier: ").withStyle(ChatFormatting.GRAY)
+                        .append(Component.literal(hoveredData.peakTier).withStyle(ChatFormatting.AQUA)));
             }
 
             // 3. Points Given
-            tooltip.add(Text.literal("Points Awarded: ").formatted(Formatting.GRAY)
-                    .append(Text.literal("+" + hoveredData.points + " pts").formatted(Formatting.YELLOW)));
+            tooltip.add(Component.literal("Points Awarded: ").withStyle(ChatFormatting.GRAY)
+                    .append(Component.literal("+" + hoveredData.points + " pts").withStyle(ChatFormatting.YELLOW)));
 
             // 4. Attained Date
             Long attained = null;
@@ -344,23 +344,23 @@ public class PlayerProfileScreen extends Screen {
             if (attained != null && attained > 1000000) {
                 try {
                     String dateStr = Instant.ofEpochSecond(attained).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER);
-                    tooltip.add(Text.literal("Attained: ").formatted(Formatting.GRAY)
-                            .append(Text.literal(dateStr).formatted(Formatting.WHITE)));
+                    tooltip.add(Component.literal("Attained: ").withStyle(ChatFormatting.GRAY)
+                            .append(Component.literal(dateStr).withStyle(ChatFormatting.WHITE)));
                 } catch (Exception ignored) {
-                    tooltip.add(Text.literal("Attained: ").formatted(Formatting.GRAY)
-                            .append(Text.literal("Legacy / Active").formatted(Formatting.DARK_GRAY)));
+                    tooltip.add(Component.literal("Attained: ").withStyle(ChatFormatting.GRAY)
+                            .append(Component.literal("Legacy / Active").withStyle(ChatFormatting.DARK_GRAY)));
                 }
             } else {
-                tooltip.add(Text.literal("Attained: ").formatted(Formatting.GRAY)
-                        .append(Text.literal("Legacy / Active").formatted(Formatting.DARK_GRAY)));
+                tooltip.add(Component.literal("Attained: ").withStyle(ChatFormatting.GRAY)
+                        .append(Component.literal("Legacy / Active").withStyle(ChatFormatting.DARK_GRAY)));
             }
 
             // 5. Retired status
             if (hoveredData.retired) {
-                tooltip.add(Text.literal("Status: Retired").formatted(Formatting.LIGHT_PURPLE));
+                tooltip.add(Component.literal("Status: Retired").withStyle(ChatFormatting.LIGHT_PURPLE));
             }
 
-            context.drawTooltip(this.textRenderer, tooltip, mouseX, mouseY);
+            context.setComponentTooltipForNextFrame(this.font, tooltip, mouseX, mouseY);
         }
     }
 
@@ -382,9 +382,9 @@ public class PlayerProfileScreen extends Screen {
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
         }
     }
 }
