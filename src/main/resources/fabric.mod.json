@@ -18,6 +18,9 @@
     ],
     "main": [
       "org.wavemelon.funnitiertagger.funnitiertagger"
+    ],
+    "modmenu": [
+      "org.wavemelon.funnitiertagger.client.ModMenuIntegration"
     ]
   },
   "mixins": [
