@@ -1,12 +1,20 @@
 package org.wavemelon.funnitiertagger;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class TierProfile {
     public String uuid;
     public String username;
+    public Map<String, String> usernameHistory;
     public String region;
     public int points;
+    public boolean restricted;
     public Map<String, GameModeData> tiers;
 
     public static class GameModeData {
@@ -16,6 +24,42 @@ public class TierProfile {
         public int points;
         public long attained; // Unix timestamp
         public boolean retired;
+    }
+
+    /**
+     * Returns unique past usernames in ascending history order,
+     * excluding duplicates and entries matching the current username.
+     */
+    public List<String> getPreviousUsernames() {
+        if (this.usernameHistory == null || this.usernameHistory.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Map.Entry<String, String>> entries = new ArrayList<>(this.usernameHistory.entrySet());
+        entries.sort((a, b) -> {
+            try {
+                return Integer.compare(Integer.parseInt(a.getKey()), Integer.parseInt(b.getKey()));
+            } catch (NumberFormatException e) {
+                return a.getKey().compareTo(b.getKey());
+            }
+        });
+
+        List<String> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        String currentLower = this.username != null ? this.username.toLowerCase(Locale.ROOT) : null;
+
+        for (Map.Entry<String, String> entry : entries) {
+            String pastName = entry.getValue();
+            if (pastName == null || pastName.isBlank()) continue;
+
+            String lower = pastName.toLowerCase(Locale.ROOT);
+            if (lower.equals(currentLower)) continue;
+            if (seen.add(lower)) {
+                result.add(pastName);
+            }
+        }
+
+        return result;
     }
 
     private static int getTierScore(GameModeData data) {

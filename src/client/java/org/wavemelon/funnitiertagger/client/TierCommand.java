@@ -79,7 +79,7 @@ public class TierCommand {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(10))
-                    .header("User-Agent", "funnitiers/2.0.0")
+                    .header("User-Agent", "funnitiers/2.0.1")
                     .build();
 
             client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
@@ -93,7 +93,7 @@ public class TierCommand {
 
                                 TierProfile profile = gson.fromJson(res.body(), TierProfile.class);
 
-                                if (profile == null || profile.tiers == null || profile.tiers.isEmpty()) {
+                                if (profile == null || (!profile.restricted && (profile.tiers == null || profile.tiers.isEmpty()))) {
                                     source.sendFeedback(Component.literal("§cNo data found for " + username));
                                     return;
                                 }

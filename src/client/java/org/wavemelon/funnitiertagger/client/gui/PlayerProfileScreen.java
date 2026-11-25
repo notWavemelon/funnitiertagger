@@ -34,9 +34,11 @@ public class PlayerProfileScreen extends Screen {
             .connectTimeout(Duration.ofSeconds(6))
             .build();
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM d, yyyy");
+    private static final String INFO_SYMBOL = "\uD83D\uDEC8"; // 🛈
 
     private final Screen parent;
     private final TierProfile profile;
+    private final List<String> previousUsernames;
     private Identifier bustTexture = null;
     private boolean imageLoading = true;
     private boolean imageFailed = false;
@@ -45,6 +47,7 @@ public class PlayerProfileScreen extends Screen {
         super(Component.literal(profile != null && profile.username != null ? profile.username : "Player Profile"));
         this.parent = parent;
         this.profile = profile;
+        this.previousUsernames = profile != null ? profile.getPreviousUsernames() : List.of();
     }
 
     public PlayerProfileScreen(TierProfile profile) {
@@ -53,8 +56,8 @@ public class PlayerProfileScreen extends Screen {
 
     @Override
     protected void init() {
-        int cardHeight = Math.min(220, this.height - 50);
-        int cardY = (this.height - cardHeight) / 2 - 10;
+        int cardHeight = Math.min(225, this.height - 48);
+        int cardY = Math.max(8, (this.height - cardHeight) / 2 - 14);
         int buttonY = Math.min(this.height - 26, cardY + cardHeight + 8);
 
         // Centered Done button
@@ -63,7 +66,7 @@ public class PlayerProfileScreen extends Screen {
                 .build());
 
         // Trigger overall rank fetch
-        if (profile != null) {
+        if (profile != null && !profile.restricted) {
             TierManager.getOverallRank(profile.uuid);
         }
 
@@ -174,31 +177,78 @@ public class PlayerProfileScreen extends Screen {
             return;
         }
 
+        boolean restricted = profile.restricted;
+
         // Dynamically compute card bounds based on screen size
-        int cardWidth = Math.min(460, this.width - 20);
-        int cardHeight = Math.min(215, this.height - 48);
+        int cardWidth = Math.min(480, this.width - 20);
+        int cardHeight = Math.min(225, this.height - 48);
         int cardX = (this.width - cardWidth) / 2;
         int cardY = Math.max(8, (this.height - cardHeight) / 2 - 14);
 
-        // Draw Main Background Card
-        context.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xD0101015);
-        context.fill(cardX - 1, cardY - 1, cardX + cardWidth + 1, cardY, 0x40FFFFFF); // Top border
-        context.fill(cardX - 1, cardY + cardHeight, cardX + cardWidth + 1, cardY + cardHeight + 1, 0x40FFFFFF); // Bottom border
-        context.fill(cardX - 1, cardY, cardX, cardY + cardHeight, 0x40FFFFFF); // Left border
-        context.fill(cardX + cardWidth, cardY, cardX + cardWidth + 1, cardY + cardHeight, 0x40FFFFFF); // Right border
+        // Card palette: red theme for restricted players, dark gray for normal players
+        int cardBgColor = restricted ? 0xD82B0B0B : 0xD0101015;
+        int borderColor = restricted ? 0x90FF4444 : 0x40FFFFFF;
+        int dividerColor = restricted ? 0x45FF5555 : 0x25FFFFFF;
+        int bustFrameBg = restricted ? 0x80200000 : 0x80000000;
+        int bustFrameTop = restricted ? 0x55FF4444 : 0x30FFFFFF;
+        int rowHoverColor = restricted ? 0x38FF5555 : 0x35FFFFFF;
+        int rowAltColor = restricted ? 0x18FF4444 : 0x12FFFFFF;
 
-        // Layout: Left Panel = Player Hero Card (145px), Right Panel = Gamemodes Grid
-        int leftWidth = 145;
+        // Draw Main Background Card
+        context.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, cardBgColor);
+        context.fill(cardX - 1, cardY - 1, cardX + cardWidth + 1, cardY, borderColor); // Top border
+        context.fill(cardX - 1, cardY + cardHeight, cardX + cardWidth + 1, cardY + cardHeight + 1, borderColor); // Bottom border
+        context.fill(cardX - 1, cardY, cardX, cardY + cardHeight, borderColor); // Left border
+        context.fill(cardX + cardWidth, cardY, cardX + cardWidth + 1, cardY + cardHeight, borderColor); // Right border
+
+        // Layout: Left Panel = Player Hero Card, Right Panel = Gamemodes Grid
+        int leftWidth = 165;
         int leftCenterX = cardX + (leftWidth / 2);
 
         // Divider between left and right panel
-        context.fill(cardX + leftWidth, cardY + 10, cardX + leftWidth + 1, cardY + cardHeight - 10, 0x25FFFFFF);
+        context.fill(cardX + leftWidth, cardY + 10, cardX + leftWidth + 1, cardY + cardHeight - 10, dividerColor);
 
         // --- LEFT PANEL: PLAYER PROFILE ---
-        // 1. Player Username (Bold Aqua)
+        // 1. Player Username (&7&m if restricted, &b&l otherwise) + optional 🛈 history badge
         String name = profile.username != null ? profile.username : "Unknown";
-        MutableComponent nameText = Component.literal(name).withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD);
-        context.centeredText(this.font, nameText, leftCenterX, cardY + 12, 0xFF55FFFF);
+        MutableComponent namePart = restricted
+                ? Component.literal(name).withStyle(ChatFormatting.GRAY, ChatFormatting.STRIKETHROUGH)
+                : Component.literal(name).withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD);
+
+        boolean hasHistory = !this.previousUsernames.isEmpty();
+        boolean hoveringHistoryIcon = false;
+        int nameY = cardY + 12;
+
+        if (hasHistory) {
+            Component infoSpacing = Component.literal(" ");
+            Component infoIcon = Component.literal(INFO_SYMBOL).withStyle(s -> s
+                    .withColor(0xAAAAAA)
+                    .withBold(false)
+                    .withStrikethrough(false));
+
+            int nameWidth = this.font.width(namePart);
+            int spaceWidth = this.font.width(infoSpacing);
+            int iconWidth = this.font.width(infoIcon);
+            int totalWidth = nameWidth + spaceWidth + iconWidth;
+            int startX = leftCenterX - (totalWidth / 2);
+            int iconX = startX + nameWidth + spaceWidth;
+
+            hoveringHistoryIcon = mouseX >= iconX - 2 && mouseX <= iconX + iconWidth + 2
+                    && mouseY >= nameY - 2 && mouseY <= nameY + this.font.lineHeight + 1;
+
+            int iconColor = hoveringHistoryIcon ? 0xFFFFFF : 0xAAAAAA;
+            MutableComponent fullName = Component.empty()
+                    .append(namePart)
+                    .append(infoSpacing)
+                    .append(Component.literal(INFO_SYMBOL).withStyle(s -> s
+                            .withColor(iconColor)
+                            .withBold(false)
+                            .withStrikethrough(false)));
+
+            context.text(this.font, fullName, startX, nameY, 0xFFFFFFFF);
+        } else {
+            context.centeredText(this.font, namePart, leftCenterX, nameY, restricted ? 0xFFAAAAAA : 0xFF55FFFF);
+        }
 
         // 2. 3D Bust (Size 76x76)
         int bustSize = 76;
@@ -206,8 +256,8 @@ public class PlayerProfileScreen extends Screen {
         int bustY = cardY + 28;
 
         // Bust card frame
-        context.fill(bustX - 3, bustY - 3, bustX + bustSize + 3, bustY + bustSize + 3, 0x80000000);
-        context.fill(bustX - 3, bustY - 3, bustX + bustSize + 3, bustY - 2, 0x30FFFFFF);
+        context.fill(bustX - 3, bustY - 3, bustX + bustSize + 3, bustY + bustSize + 3, bustFrameBg);
+        context.fill(bustX - 3, bustY - 3, bustX + bustSize + 3, bustY - 2, bustFrameTop);
 
         if (this.bustTexture != null) {
             context.blit(RenderPipelines.GUI_TEXTURED, this.bustTexture, bustX, bustY, 0.0f, 0.0f, bustSize, bustSize, bustSize, bustSize);
@@ -224,27 +274,38 @@ public class PlayerProfileScreen extends Screen {
                 .append(Component.literal(region).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD));
         context.centeredText(this.font, regionText, leftCenterX, statsY, 0xFFFFFFFF);
 
-        // Overall placement rank (if available) + Points
+        // Overall placement rank (if available and not restricted) + Points (0 if restricted)
         Integer overallRank = null;
-        if (profile.uuid != null) {
-            overallRank = TierManager.getOverallRank(profile.uuid);
-        }
-        if (overallRank == null && profile.username != null) {
-            overallRank = TierManager.getOverallRank(profile.username);
+        if (!restricted) {
+            if (profile.uuid != null) {
+                overallRank = TierManager.getOverallRank(profile.uuid);
+            }
+            if (overallRank == null && profile.username != null) {
+                overallRank = TierManager.getOverallRank(profile.username);
+            }
         }
 
+        int displayPoints = restricted ? 0 : profile.points;
         MutableComponent pointsText = Component.literal("Points: ").withStyle(ChatFormatting.GRAY)
-                .append(Component.literal(profile.points + " pts").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+                .append(Component.literal(displayPoints + " pts").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
         if (overallRank != null) {
             pointsText.append(Component.literal(" (#" + overallRank + ")").withStyle(ChatFormatting.YELLOW));
         }
         context.centeredText(this.font, pointsText, leftCenterX, statsY + 12, 0xFFFFFFFF);
 
+        int nextY = statsY + 24;
         String peakMode = profile.getDisplayMode();
         if (peakMode != null) {
             Component bestText = Component.literal("Peak: ").withStyle(ChatFormatting.DARK_GRAY)
                     .append(Component.literal(TierCommand.formatModeName(peakMode)).withStyle(ChatFormatting.YELLOW));
-            context.centeredText(this.font, bestText, leftCenterX, statsY + 24, 0xFFFFFFFF);
+            context.centeredText(this.font, bestText, leftCenterX, nextY, 0xFFFFFFFF);
+            nextY += 14;
+        }
+
+        if (restricted) {
+            Component restrictedNotice = Component.literal("This player is restricted.")
+                    .withStyle(ChatFormatting.RED, ChatFormatting.BOLD, ChatFormatting.UNDERLINE);
+            context.centeredText(this.font, restrictedNotice, leftCenterX, nextY, 0xFFFF5555);
         }
 
         // --- RIGHT PANEL: GAMEMODES GRID ---
@@ -288,15 +349,15 @@ public class PlayerProfileScreen extends Screen {
                 if (isHovered) {
                     hoveredModeKey = modeKey;
                     hoveredData = data;
-                    context.fill(colX - 2, rowY - 1, colX + colWidth - 2, rowY + lineHeight - 1, 0x35FFFFFF);
+                    context.fill(colX - 2, rowY - 1, colX + colWidth - 2, rowY + lineHeight - 1, rowHoverColor);
                 } else if ((inCol1 ? i : (i - half)) % 2 == 0) {
-                    context.fill(colX - 2, rowY - 1, colX + colWidth - 2, rowY + lineHeight - 1, 0x12FFFFFF);
+                    context.fill(colX - 2, rowY - 1, colX + colWidth - 2, rowY + lineHeight - 1, rowAltColor);
                 }
 
                 // Format: [Icon] Mode: Tier (Peak)
                 MutableComponent icon = TierManager.getIcon(modeKey);
                 String modeFormatted = TierCommand.formatModeName(modeKey);
-                int tierColor = data.retired ? 0xFF880EFC : getTierColor(data.tier);
+                int tierColor = TierManager.getTierColor(data.tier, data.retired);
                 String tierStr = (data.retired ? "R" : "") + data.tier;
 
                 MutableComponent line = icon.append(Component.literal(" " + modeFormatted + ": ").withStyle(ChatFormatting.WHITE))
@@ -310,17 +371,26 @@ public class PlayerProfileScreen extends Screen {
             }
         }
 
-        // Draw Gamemode Tooltip on Hover
-        if (hoveredModeKey != null && hoveredData != null) {
+        // Draw Tooltip on Hover (Username History takes priority if hovered)
+        if (hoveringHistoryIcon) {
+            List<Component> tooltip = new ArrayList<>();
+            tooltip.add(Component.literal("Previous Usernames").withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD));
+            for (String prev : this.previousUsernames) {
+                tooltip.add(Component.literal("• ").withStyle(ChatFormatting.DARK_GRAY)
+                        .append(Component.literal(prev).withStyle(ChatFormatting.GRAY)));
+            }
+            context.setComponentTooltipForNextFrame(this.font, tooltip, mouseX, mouseY);
+        } else if (hoveredModeKey != null && hoveredData != null) {
             List<Component> tooltip = new ArrayList<>();
             String modeFormatted = TierCommand.formatModeName(hoveredModeKey);
-            int tierColor = hoveredData.retired ? 0xFF880EFC : getTierColor(hoveredData.tier);
+            int tierColor = TierManager.getTierColor(hoveredData.tier, hoveredData.retired);
             String tierStr = (hoveredData.retired ? "R" : "") + hoveredData.tier;
 
-            // 1. Title Line: [Icon] Gamemode: Tier
+            // 1. Title Line: [Icon] Gamemode - Tier (hyphen formatted as &7-)
             MutableComponent title = TierManager.getIcon(hoveredModeKey)
                     .append(Component.literal(" " + modeFormatted).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
-                    .append(Component.literal(" - " + tierStr).withStyle(s -> s.withColor(tierColor).withBold(true)));
+                    .append(Component.literal(" - ").withStyle(s -> s.withColor(ChatFormatting.GRAY).withBold(false)))
+                    .append(Component.literal(tierStr).withStyle(s -> s.withColor(tierColor).withBold(true)));
             tooltip.add(title);
 
             // 2. Peak Tier
@@ -362,23 +432,6 @@ public class PlayerProfileScreen extends Screen {
 
             context.setComponentTooltipForNextFrame(this.font, tooltip, mouseX, mouseY);
         }
-    }
-
-    private static int getTierColor(String tier) {
-        if (tier == null) return 0xFFFFFFFF;
-        return switch (tier) {
-            case "LT5" -> 0xFFD0D0D0;
-            case "HT5" -> 0xFF7E7E7E;
-            case "LT4" -> 0xFF8EEB8E;
-            case "HT4" -> 0xFF00B000;
-            case "LT3" -> 0xFFC67B42;
-            case "HT3" -> 0xFFF89F5A;
-            case "LT2" -> 0xFFA0A7B2;
-            case "HT2" -> 0xFFC4D3E7;
-            case "LT1" -> 0xFFD5B355;
-            case "HT1" -> 0xFFFFAA00;
-            default -> 0xFFFFFFFF;
-        };
     }
 
     @Override

@@ -6,18 +6,25 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 public class TierManager {
+    public static final String TAG_MARKER = "funnitiers_tag";
+
     public static final Map<UUID, TierProfile> profileCache = new ConcurrentHashMap<>();
     private static final Set<UUID> pendingFetches = ConcurrentHashMap.newKeySet();
     private static final TierProfile EMPTY_PROFILE = new TierProfile();
@@ -30,8 +37,31 @@ public class TierManager {
             .connectTimeout(Duration.ofSeconds(6))
             .build();
     private static final Gson gson = new Gson();
+    private static final Pattern LEGACY_COLOR_PATTERN = Pattern.compile("§.");
 
     private static String overrideMode = null;
+
+    private record TagParts(MutableComponent icon, MutableComponent label, int accentColor) {
+        MutableComponent formatBadge(ModConfig.TagPosition position) {
+            boolean hasIcon = icon != null && !icon.getString().isEmpty();
+            if (position == ModConfig.TagPosition.RIGHT) {
+                // Right side: [rank] [icon]
+                MutableComponent badge = Component.empty().append(label);
+                if (hasIcon) {
+                    badge.append(Component.literal(" ")).append(icon);
+                }
+                return badge;
+            } else {
+                // Left side: [icon] [rank]
+                MutableComponent badge = Component.empty();
+                if (hasIcon) {
+                    badge.append(icon).append(Component.literal(" "));
+                }
+                badge.append(label);
+                return badge;
+            }
+        }
+    }
 
     public static void setOverrideMode(String mode) {
         overrideMode = mode;
@@ -85,7 +115,7 @@ public class TierManager {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(10))
-                    .header("User-Agent", "funnitiers/2.0.0")
+                    .header("User-Agent", "funnitiers/2.0.1")
                     .build();
 
             client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
@@ -139,10 +169,136 @@ public class TierManager {
         }
     }
 
-    public static Component getFormattedTag(UUID uuid) {
-        if (uuid == null) return null;
+    /**
+     * Checks whether the component tree already contains a tag added by FunniTiers.
+     * Uses an invisible style insertion marker so tags from other tier taggers are never mistaken for ours.
+     */
+    public static boolean hasFunniTiersTag(Component component) {
+        if (component == null) return false;
+        if (TAG_MARKER.equals(component.getStyle().getInsertion())) {
+            return true;
+        }
+        for (Component sibling : component.getSiblings()) {
+            if (hasFunniTiersTag(sibling)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-        if (!ModConfig.getInstance().enabled) {
+    /**
+     * Checks whether text contains the player's username as a standalone identifier
+     * (prevents tagging health displays or unrelated text lines).
+     */
+    public static boolean containsPlayerName(String text, String playerName) {
+        if (text == null || text.isEmpty() || playerName == null || playerName.length() < 2) {
+            return false;
+        }
+        String clean = LEGACY_COLOR_PATTERN.matcher(text).replaceAll("");
+        Pattern pattern = Pattern.compile("(?<![A-Za-z0-9_])" + Pattern.quote(playerName) + "(?![A-Za-z0-9_])");
+        return pattern.matcher(clean).find();
+    }
+
+    /**
+     * Attaches the FunniTiers tag to a component (on the left or right per config),
+     * preserving any tags already added by other tier taggers.
+     */
+    public static Component applyTag(Component original, UUID uuid) {
+        if (original == null || uuid == null || hasFunniTiersTag(original)) {
+            return original;
+        }
+        TagParts parts = buildTagParts(uuid);
+        if (parts == null) {
+            return original;
+        }
+        return attachTagParts(original, parts);
+    }
+
+    /**
+     * Attaches the FunniTiers tag ONLY to the line containing the player's username.
+     * For single-line text displays, behaves identically to applyTag after verifying the username is present.
+     * For multi-line text displays (e.g. username + health below), only the username line is tagged.
+     */
+    public static Component applyTagToNameLine(Component original, String playerName, UUID uuid) {
+        if (original == null || playerName == null || uuid == null || hasFunniTiersTag(original)) {
+            return original;
+        }
+
+        String raw = original.getString();
+        if (!containsPlayerName(raw, playerName)) {
+            return original;
+        }
+
+        if (!raw.contains("\n")) {
+            return applyTag(original, uuid);
+        }
+
+        TagParts parts = buildTagParts(uuid);
+        if (parts == null) {
+            return original;
+        }
+
+        List<MutableComponent> lines = new ArrayList<>();
+        lines.add(Component.empty());
+
+        original.visit((style, text) -> {
+            String[] segments = text.split("\n", -1);
+            for (int i = 0; i < segments.length; i++) {
+                if (i > 0) {
+                    lines.add(Component.empty());
+                }
+                if (!segments[i].isEmpty()) {
+                    lines.get(lines.size() - 1).append(Component.literal(segments[i]).withStyle(style));
+                }
+            }
+            return Optional.empty();
+        }, Style.EMPTY);
+
+        boolean tagged = false;
+        MutableComponent rebuilt = Component.empty();
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) {
+                rebuilt.append(Component.literal("\n"));
+            }
+            MutableComponent line = lines.get(i);
+            if (!tagged && containsPlayerName(line.getString(), playerName)) {
+                rebuilt.append(attachTagParts(line, parts));
+                tagged = true;
+            } else {
+                rebuilt.append(line);
+            }
+        }
+
+        return tagged ? rebuilt : original;
+    }
+
+    private static MutableComponent attachTagParts(Component target, TagParts parts) {
+        ModConfig.TagPosition position = ModConfig.getInstance().tagPosition;
+        MutableComponent divider = buildDivider(parts.accentColor());
+        MutableComponent badge = parts.formatBadge(position);
+        MutableComponent markedTag = Component.empty().withStyle(s -> s.withInsertion(TAG_MARKER));
+
+        if (position == ModConfig.TagPosition.RIGHT) {
+            // [name] [divider] [rank] [icon]
+            markedTag.append(divider).append(badge);
+            return Component.empty().append(target).append(markedTag);
+        } else {
+            // [icon] [rank] [divider] [name]
+            markedTag.append(badge).append(divider);
+            return Component.empty().append(markedTag).append(target);
+        }
+    }
+
+    private static MutableComponent buildDivider(int accentColor) {
+        return switch (ModConfig.getInstance().dividerStyle) {
+            case DYNAMIC -> Component.literal(" | ").withStyle(s -> s.withColor(accentColor));
+            case NONE -> Component.literal(" ").withStyle(Style.EMPTY);
+            case DEFAULT -> Component.literal(" | ").withStyle(s -> s.withColor(0xAAAAAA));
+        };
+    }
+
+    private static TagParts buildTagParts(UUID uuid) {
+        if (uuid == null || !ModConfig.getInstance().enabled) {
             return null;
         }
 
@@ -156,31 +312,33 @@ public class TierManager {
             return null;
         }
 
-        if (profile == EMPTY_PROFILE || profile.tiers == null || profile.tiers.isEmpty()) {
+        if (profile == EMPTY_PROFILE || profile.restricted || profile.tiers == null || profile.tiers.isEmpty()) {
             return null;
         }
 
-        if (ModConfig.getInstance().displayType == ModConfig.DisplayType.RANK) {
+        ModConfig config = ModConfig.getInstance();
+
+        if (config.displayType == ModConfig.DisplayType.RANK) {
             Integer rank = getOverallRank(uuid.toString());
             if (rank != null) {
-                MutableComponent tag = Component.literal("🏆 ").withStyle(s -> s.withColor(0xFFD700));
-                tag.append(Component.literal("#" + rank).withStyle(s -> s.withColor(0xFFAA00)));
-                tag.append(Component.literal(" | ").withStyle(s -> s.withColor(0xAAAAAA)));
-                return tag;
+                MutableComponent icon = Component.literal("🏆").withStyle(s -> s.withColor(0xFFD700));
+                MutableComponent label = Component.literal("#" + rank).withStyle(s -> s.withColor(0xFFAA00));
+                return new TagParts(icon, label, 0xFFAA00);
             }
         }
 
-        if (ModConfig.getInstance().displayType == ModConfig.DisplayType.POINTS) {
-            MutableComponent tag = Component.literal("⭐ ").withStyle(s -> s.withColor(0xFFD700));
-            tag.append(Component.literal(profile.points + " pts").withStyle(s -> s.withColor(0xFFAA00)));
-            tag.append(Component.literal(" | ").withStyle(s -> s.withColor(0xAAAAAA)));
-            return tag;
+        if (config.displayType == ModConfig.DisplayType.POINTS) {
+            MutableComponent icon = Component.literal("⭐").withStyle(s -> s.withColor(0xFFD700));
+            MutableComponent label = Component.literal(profile.points + " pts").withStyle(s -> s.withColor(0xFFAA00));
+            return new TagParts(icon, label, 0xFFAA00);
         }
 
         String effectiveMode = getOverrideMode();
         String modeKey;
         if (effectiveMode != null && profile.tiers.containsKey(effectiveMode)) {
             modeKey = effectiveMode;
+        } else if ("crystal".equals(effectiveMode) && profile.tiers.containsKey("crystal;")) {
+            modeKey = "crystal;";
         } else {
             modeKey = profile.getDisplayMode();
         }
@@ -191,55 +349,96 @@ public class TierManager {
         if (data == null || data.tier == null) return null;
 
         try {
-            MutableComponent tag = getIcon(modeKey);
+            MutableComponent icon = getIcon(modeKey);
             String tierStr = (data.retired ? "R" : "") + data.tier;
-            int tierColor = data.retired ? 0x880EFC : getTierColor(data.tier);
-            tag.append(Component.literal(" " + tierStr).withStyle(s -> s.withColor(tierColor)));
-            tag.append(Component.literal(" | ").withStyle(s -> s.withColor(0xAAAAAA)));
-            return tag;
+            int tierColor = getTierColor(data.tier, data.retired);
+            MutableComponent label = Component.literal(tierStr).withStyle(s -> s.withColor(tierColor));
+            return new TagParts(icon, label, tierColor);
         } catch (Exception e) {
             return null;
         }
     }
 
-    private static int getTierColor(String tier) {
-        if (tier == null) return 0xFFFFFF;
-        return switch (tier) {
-            case "LT5" -> 0xD0D0D0;
-            case "HT5" -> 0x7E7E7E;
-            case "LT4" -> 0x8EEB8E;
-            case "HT4" -> 0x00A000;
-            case "LT3" -> 0xC67B42;
-            case "HT3" -> 0xF89F5A;
-            case "LT2" -> 0xA0A7B2;
-            case "HT2" -> 0xC4D3E7;
-            case "LT1" -> 0xD5B355;
-            case "HT1" -> 0xFFAA00;
-            default -> 0xFFFFFF;
-        };
+    public static Component getFormattedTag(UUID uuid) {
+        TagParts parts = buildTagParts(uuid);
+        if (parts == null) return null;
+        ModConfig.TagPosition position = ModConfig.getInstance().tagPosition;
+        MutableComponent divider = buildDivider(parts.accentColor());
+        MutableComponent badge = parts.formatBadge(position);
+        MutableComponent tag = Component.empty().withStyle(s -> s.withInsertion(TAG_MARKER));
+        if (position == ModConfig.TagPosition.RIGHT) {
+            tag.append(divider).append(badge);
+        } else {
+            tag.append(badge).append(divider);
+        }
+        return tag;
+    }
+
+    public static MutableComponent buildPreviewNametag(String modeKey, String rankKey, String samplePlayer) {
+        boolean retired = "RETIRED".equalsIgnoreCase(rankKey);
+        String tierStr = retired ? "RHT1" : rankKey;
+        int color = ModConfig.getInstance().getColorByKey(rankKey);
+        MutableComponent icon = getIcon(modeKey);
+        MutableComponent label = Component.literal(tierStr).withStyle(s -> s.withColor(color));
+        return attachTagParts(Component.literal(samplePlayer).withStyle(s -> s.withColor(0xFFFFFF)), new TagParts(icon, label, color));
+    }
+
+    public static int getTierColor(String tier, boolean retired) {
+        return ModConfig.getInstance().getTierColor(tier, retired);
     }
 
     public static MutableComponent getIcon(String mode) {
         if (mode == null) return Component.literal("");
+        if (ModConfig.getInstance().iconStyle == ModConfig.IconStyle.LEGACY) {
+            return getLegacyIcon(mode);
+        }
+        return getCustomIcon(mode);
+    }
+
+    private static MutableComponent getCustomIcon(String mode) {
+        String glyph = switch (mode) {
+            case "wind_charge" -> "\uF6C0";
+            case "slime_mace" -> "\uF6C1";
+            case "real_pot" -> "\uF6C2";
+            case "pickaxe" -> "\uF6C3";
+            case "boxing" -> "\uF6C4";
+            case "jousting" -> "\uF6C5";
+            case "pressure_plate" -> "\uF6C6";
+            case "stone_age" -> "\uF6C7";
+            case "wooden_smp" -> "\uF6C8";
+            case "dogs_out" -> "\uF6C9";
+            case "modern" -> "\uF6CA";
+            case "carrot" -> "\uF6CB";
+            case "one_shot" -> "\uF6CC";
+            case "wavemelon" -> "\uF6CD";
+            case "crystal", "crystal;" -> "\uF6CE";
+            case "wooden_spear" -> "\uF6CF";
+            case "bow_boost_mace" -> "\uF6D0";
+            default -> "";
+        };
+        return Component.literal(glyph).withStyle(s -> s.withColor(0xFFFFFF));
+    }
+
+    private static MutableComponent getLegacyIcon(String mode) {
         return switch (mode) {
-            case "wind_charge" -> Component.literal("\uE000");
-            case "slime_mace" -> Component.literal("\uE001");
-            case "real_pot" -> Component.literal("\uE002");
-            case "pickaxe" -> Component.literal("\uE003");
-            case "boxing" -> Component.literal("\uE004");
-            case "jousting" -> Component.literal("\uE005");
-            case "pressure_plate" -> Component.literal("\uE006");
-            case "stone_age" -> Component.literal("\uE007");
-            case "wooden_smp" -> Component.literal("\uE008");
-            case "dogs_out" -> Component.literal("\uE009");
-            case "modern" -> Component.literal("\uE00A");
-            case "carrot" -> Component.literal("\uE00B");
-            case "one_shot" -> Component.literal("\uE00C");
-            case "wavemelon" -> Component.literal("\uE00D");
-            case "crystal", "crystal;" -> Component.literal("\uE00E");
-            case "wooden_spear" -> Component.literal("\uE00F");
-            case "bow_boost_mace" -> Component.literal("\uE010");
-            default -> Component.literal("");
+            case "wind_charge" -> Component.literal("💨").withStyle(s -> s.withColor(0xD6EEFF));
+            case "slime_mace" -> Component.literal("🫟").withStyle(s -> s.withColor(0x45BC53));
+            case "real_pot" -> Component.literal("🧪").withStyle(s -> s.withColor(0x912E48));
+            case "pickaxe" -> Component.literal("⛏").withStyle(s -> s.withColor(0x4289BC));
+            case "boxing" -> Component.literal("🥊").withStyle(s -> s.withColor(0xFF5555));
+            case "jousting" -> Component.literal("🏇").withStyle(s -> s.withColor(0x7F3300));
+            case "pressure_plate" -> Component.literal("🍽").withStyle(s -> s.withColor(0xAAAAAA));
+            case "stone_age" -> Component.literal("🪨").withStyle(s -> s.withColor(0x555555));
+            case "wooden_smp" -> Component.literal("🪵").withStyle(s -> s.withColor(0x914D1F));
+            case "dogs_out" -> Component.literal("\uD83D\uDC63").withStyle(s -> s.withColor(0xFFBB8E));
+            case "modern" -> Component.literal("☻").withStyle(s -> s.withColor(0x55FF55));
+            case "carrot" -> Component.literal("🥕").withStyle(s -> s.withColor(0xFF6A00));
+            case "one_shot" -> Component.literal("💥").withStyle(s -> s.withColor(0xFF5555));
+            case "wavemelon" -> Component.literal("🍉").withStyle(s -> s.withColor(0x7FC9FF));
+            case "crystal", "crystal;" -> Component.literal("💎").withStyle(s -> s.withColor(0xFF55FF));
+            case "wooden_spear" -> Component.literal("🩼").withStyle(s -> s.withColor(0x914D1F));
+            case "bow_boost_mace" -> Component.literal("⚒").withStyle(s -> s.withColor(0x914D1F));
+            default -> Component.literal("").withStyle(s -> s.withColor(0xFFFFFF));
         };
     }
 
@@ -249,7 +448,7 @@ public class TierManager {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(10))
-                    .header("User-Agent", "funnitiers/2.0.0")
+                    .header("User-Agent", "funnitiers/2.0.1")
                     .build();
 
             client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
@@ -260,7 +459,7 @@ public class TierManager {
                                 return;
                             }
                             TierProfile p = gson.fromJson(res.body(), TierProfile.class);
-                            if (p != null && p.tiers != null) {
+                            if (p != null && (p.tiers != null || p.restricted)) {
                                 profileCache.put(uuid, p);
                             } else {
                                 profileCache.put(uuid, EMPTY_PROFILE);

@@ -9,6 +9,8 @@ import net.minecraft.network.chat.Component;
 import org.wavemelon.funnitiertagger.ModConfig;
 import org.wavemelon.funnitiertagger.TierManager;
 
+import java.util.Locale;
+
 public class funnitiertaggerClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
@@ -26,11 +28,30 @@ public class funnitiertaggerClient implements ClientModInitializer {
                     })
             );
 
-            // 2. /funnimode <gamemode> (Universal Client Command)
+            // 2. /funnimode <gamemode> (Universal Client Command with tab completions)
             dispatcher.register(ClientCommands.literal("funnimode")
-                    .then(ClientCommands.argument("gamemode", StringArgumentType.word())
+                    .then(ClientCommands.argument("gamemode", StringArgumentType.greedyString())
+                            .suggests((context, builder) -> {
+                                String remaining = builder.getRemainingLowerCase();
+                                if ("auto".startsWith(remaining)) {
+                                    builder.suggest("auto");
+                                }
+                                for (String mode : TierCommand.MODES) {
+                                    if (mode.toLowerCase(Locale.ROOT).startsWith(remaining)) {
+                                        builder.suggest(mode);
+                                    }
+                                }
+                                return builder.buildFuture();
+                            })
                             .executes(context -> {
-                                String mode = StringArgumentType.getString(context, "gamemode");
+                                String mode = StringArgumentType.getString(context, "gamemode").trim();
+
+                                if (mode.isEmpty() || mode.equalsIgnoreCase("auto") || mode.equalsIgnoreCase("automatic")) {
+                                    TierManager.setOverrideMode(null);
+                                    TierManager.clearCache();
+                                    context.getSource().sendFeedback(Component.literal("Mode reset to Automatic (Peak)").withStyle(ChatFormatting.YELLOW));
+                                    return 1;
+                                }
 
                                 TierManager.setOverrideMode(mode);
                                 TierManager.clearCache();

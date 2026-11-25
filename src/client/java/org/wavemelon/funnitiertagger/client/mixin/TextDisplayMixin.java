@@ -3,8 +3,8 @@ package org.wavemelon.funnitiertagger.client.mixin;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,10 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.wavemelon.funnitiertagger.ModConfig;
 import org.wavemelon.funnitiertagger.TierManager;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-@Mixin(Display.TextDisplay.class)
+@Mixin(value = Display.TextDisplay.class, priority = 1500)
 public abstract class TextDisplayMixin {
 
     @Inject(method = "getText", at = @At("RETURN"), cancellable = true)
@@ -24,7 +21,7 @@ public abstract class TextDisplayMixin {
         if (!ModConfig.getInstance().enabled) return;
 
         Component original = cir.getReturnValue();
-        if (original == null) return;
+        if (original == null || TierManager.hasFunniTiersTag(original)) return;
 
         Minecraft client = Minecraft.getInstance();
         if (client.level == null) return;
@@ -32,39 +29,48 @@ public abstract class TextDisplayMixin {
         String raw = original.getString();
         if (raw.isEmpty()) return;
 
-        // Prevent duplicate tagging if getText is wrapped or re-invoked
-        if (raw.contains(" | ") && (raw.contains("HT") || raw.contains("LT") || raw.contains("R1") || raw.contains("R2") || raw.contains("R3") || raw.contains("R4") || raw.contains("R5") || raw.contains("pts") || raw.contains("#"))) {
-            return;
-        }
-
         Display.TextDisplay entity = (Display.TextDisplay) (Object) this;
 
-        // 1. Fast-path: check if entity is riding a player
-        if (entity.getVehicle() instanceof Player player) {
-            Component tag = TierManager.getFormattedTag(player.getUUID());
-            if (tag != null) {
-                MutableComponent newText = Component.empty().append(tag).append(original);
-                cir.setReturnValue(newText);
+        // 1. Fast-path: walk vehicle chain to check if this TextDisplay is riding a player
+        Player ridingPlayer = findRidingPlayer(entity);
+        if (ridingPlayer != null) {
+            // Only tag if this display actually contains the player's username
+            // (prevents tagging health bars / sub-lines riding the player)
+            String playerName = ridingPlayer.getName().getString();
+            Component updated = TierManager.applyTagToNameLine(original, playerName, ridingPlayer.getUUID());
+            if (updated != original) {
+                cir.setReturnValue(updated);
             }
             return;
         }
 
-        // 2. Fallback: match by exact word boundary against nearby players
+        // 2. Fallback: match by exact username boundary against nearby players
         for (AbstractClientPlayer player : client.level.players()) {
+            if (entity.distanceToSqr(player) > 25.0) continue;
+
             String name = player.getName().getString();
-            if (name == null || name.length() < 3) continue;
+            if (name == null || name.length() < 2) continue;
 
-            Pattern pattern = Pattern.compile("\\b" + Pattern.quote(name) + "\\b");
-            Matcher matcher = pattern.matcher(raw);
-
-            if (matcher.find()) {
-                Component tag = TierManager.getFormattedTag(player.getUUID());
-                if (tag != null) {
-                    MutableComponent newText = Component.empty().append(tag).append(original);
-                    cir.setReturnValue(newText);
-                    return;
+            if (TierManager.containsPlayerName(raw, name)) {
+                Component updated = TierManager.applyTagToNameLine(original, name, player.getUUID());
+                if (updated != original) {
+                    cir.setReturnValue(updated);
                 }
+                return;
             }
         }
+    }
+
+    private static Player findRidingPlayer(Entity entity) {
+        Entity current = entity.getVehicle();
+        int depth = 0;
+        while (current != null && depth < 4) {
+            if (current instanceof Player player) {
+                return player;
+            }
+            current = current.getVehicle();
+            depth++;
+        }
+        return null;
     }
 }

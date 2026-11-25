@@ -4,6 +4,8 @@
   "package": "org.wavemelon.funnitiertagger.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "AvatarRendererMixin",
+    "TextDisplayMixin"
   ],
   "injectors": {
     "defaultRequire": 1
@@ -12,6 +14,5 @@
     "requireAnnotations": true
   },
   "mixins": [
-    "TextDisplayMixin"
   ]
 }
